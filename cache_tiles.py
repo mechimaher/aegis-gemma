@@ -30,7 +30,7 @@ REGIONS = {
     "doha": {
         "name": "Doha, Qatar",
         "bounds": [25.20, 51.40, 25.45, 51.65],  # [lat_min, lon_min, lat_max, lon_max]
-        "zoom_range": [10, 15],
+        "zoom_range": [10, 16],
     },
     "doha_wide": {
         "name": "Greater Doha Region",

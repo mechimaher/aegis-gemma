@@ -30,10 +30,10 @@ function switchTab(tab) {
 function initMap() {
   state.map = L.map('map', {
     center: [25.2854, 51.5310], zoom: 13,
-    zoomControl: true, attributionControl: false,
+    zoomControl: true, attributionControl: false, maxZoom: 16,
   });
   // Tile layer with CSS class for professional filter treatment
-  const tiles = L.tileLayer('/tiles/{z}/{x}/{y}.png', { maxZoom: 18, className: 'map-tiles' });
+  const tiles = L.tileLayer('/tiles/{z}/{x}/{y}.png', { maxZoom: 16, maxNativeZoom: 16, className: 'map-tiles' });
   tiles.addTo(state.map);
 
   // Impact radius layer (rendered below markers)
@@ -337,7 +337,7 @@ function updateReportWithAnalysis(reportId, report) {
 
 function flyToReport(report) {
   switchTab('map');
-  state.map.flyTo([report.latitude, report.longitude], 16, { duration: 1.2 });
+  state.map.flyTo([report.latitude, report.longitude], 15, { duration: 1.2 });
   setTimeout(() => {
     const marker = state.markers[`r-${report.id}`];
     if (marker) marker.openPopup();
