@@ -444,7 +444,7 @@ function buildPopupHTML(report, sev, a) {
 
       ${a.recommended_action ? `
       <div class="pe-cmd">
-        <span class="pe-cmd-icon">⚡</span>
+        <span class="pe-cmd-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00897b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
         <span class="pe-cmd-text">${a.recommended_action}</span>
       </div>` : ''}
 
