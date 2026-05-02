@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initMap(); initClock(); initWebSocket(); initVoice();
   loadReports(); loadDashboard();
   setInterval(loadDashboard, 15000);
+  setInterval(refreshElapsedTimes, 30000);
 });
 
 // ─── Tab Switching ──────────────────────────────────
@@ -324,13 +325,7 @@ function updateReportWithAnalysis(reportId, report) {
     card.id = `report-card-${reportId}`;
     const analysis = report.ai_analysis || {};
     const time = report.created_at ? new Date(report.created_at).toLocaleTimeString() : '';
-    card.innerHTML = `
-      <div class="report-header">
-        <span class="report-id">#${String(report.id).padStart(3,'0')}</span>
-        <span class="severity-badge ${severity}">${severity}</span>
-      </div>
-      <div class="report-text">${report.report_text || ''}</div>
-      <div class="report-meta"><span>${analysis.category||'pending'}</span><span>${time}</span></div>`;
+    card.innerHTML = buildCardHTML(report, severity, analysis);
     card.onclick = () => { flyToReport(report); };
   }
   addReportToMap(report);
@@ -470,6 +465,46 @@ function sevColor(s) {
   return { critical: '#d93025', high: '#e8710a', medium: '#f9ab00', low: '#1e8e3e' }[s] || '#5f6368';
 }
 
+// ─── Event Lifecycle Helpers ────────────────────────
+function elapsedTime(isoDate) {
+  if (!isoDate) return '';
+  const diff = Math.max(0, Math.floor((Date.now() - new Date(isoDate).getTime()) / 1000));
+  if (diff < 60) return `${diff}s`;
+  if (diff < 3600) return `${Math.floor(diff/60)}m`;
+  if (diff < 86400) return `${Math.floor(diff/3600)}h ${Math.floor((diff%3600)/60)}m`;
+  return `${Math.floor(diff/86400)}d`;
+}
+
+function getEventStatus(isoDate) {
+  if (!isoDate) return { label: 'ACTIVE', cls: 'status-active' };
+  const hours = (Date.now() - new Date(isoDate).getTime()) / 3600000;
+  if (hours < 6) return { label: 'ACTIVE', cls: 'status-active' };
+  if (hours < 24) return { label: 'MONITORING', cls: 'status-monitoring' };
+  return { label: 'RESOLVED', cls: 'status-resolved' };
+}
+
+function buildCardHTML(report, sev, a) {
+  const elapsed = elapsedTime(report.created_at);
+  const status = getEventStatus(report.created_at);
+  return `<div class="report-header">
+    <span class="report-id">#${String(report.id).padStart(3,'0')}</span>
+    <span class="severity-badge ${sev}">${sev}</span>
+  </div>
+  <div class="report-text">${report.report_text || ''}</div>
+  <div class="report-meta">
+    <span>${a.category || 'pending'}</span>
+    <span class="event-status ${status.cls}"><span class="status-pulse"></span>${status.label}</span>
+    <span class="elapsed-time" data-created="${report.created_at || ''}">${elapsed}</span>
+  </div>`;
+}
+
+function refreshElapsedTimes() {
+  document.querySelectorAll('.elapsed-time[data-created]').forEach(el => {
+    const created = el.getAttribute('data-created');
+    if (created) el.textContent = elapsedTime(created);
+  });
+}
+
 // ─── Reports List ───────────────────────────────────
 function addReportToList(report) {
   if (state.reportIds.has(report.id)) return;
@@ -479,13 +514,10 @@ function addReportToList(report) {
   if (empty) empty.remove();
   const sev = report.severity || report.ai_analysis?.severity || 'unknown';
   const a = report.ai_analysis || {};
-  const t = report.created_at ? new Date(report.created_at).toLocaleTimeString() : '';
   const card = document.createElement('div');
   card.className = `report-card severity-${sev}`; card.id = `report-card-${report.id}`;
   card.onclick = () => { flyToReport(report); showAiAnalysis(report); };
-  card.innerHTML = `<div class="report-header"><span class="report-id">#${String(report.id).padStart(3,'0')}</span><span class="severity-badge ${sev}">${sev}</span></div>
-    <div class="report-text">${report.report_text||''}</div>
-    <div class="report-meta"><span>${a.category||'pending'}</span><span>${t}</span></div>`;
+  card.innerHTML = buildCardHTML(report, sev, a);
   list.insertBefore(card, list.firstChild);
   state.reports.unshift(report);
   document.getElementById('report-count').textContent = state.reports.length;
