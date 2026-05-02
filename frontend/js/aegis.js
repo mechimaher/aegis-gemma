@@ -8,6 +8,7 @@ const state = {
   submittingId: null, heartbeatTimer: null,
   streamBuffers: {}, // per-report token buffers
   recognition: null, isListening: false,
+  crosshair: null, // pin-mode crosshair overlay
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -68,13 +69,42 @@ function togglePinMode() {
     btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Cancel Pin';
     overlay.classList.add('active');
     document.getElementById('map').style.cursor = 'crosshair';
+    showCrosshair();
   } else {
     btn.classList.remove('active');
     btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg> Drop Crisis Pin';
     overlay.classList.remove('active');
     document.getElementById('map').style.cursor = '';
+    hideCrosshair();
     if (state.pendingPin) { state.map.removeLayer(state.pendingPin); state.pendingPin = null; }
   }
+}
+
+// ─── Map Crosshair (pin-mode target indicator) ──────
+function showCrosshair() {
+  if (state.crosshair) return;
+  const mapEl = document.getElementById('map');
+  const ch = document.createElement('div');
+  ch.id = 'map-crosshair';
+  ch.innerHTML = `
+    <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="32" cy="32" r="22" stroke="#1a73e8" stroke-width="2" stroke-dasharray="4 3" opacity="0.5">
+        <animateTransform attributeName="transform" type="rotate" from="0 32 32" to="360 32 32" dur="8s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="32" cy="32" r="12" stroke="#1a73e8" stroke-width="2" opacity="0.7"/>
+      <line x1="32" y1="4" x2="32" y2="18" stroke="#1a73e8" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+      <line x1="32" y1="46" x2="32" y2="60" stroke="#1a73e8" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+      <line x1="4" y1="32" x2="18" y2="32" stroke="#1a73e8" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+      <line x1="46" y1="32" x2="60" y2="32" stroke="#1a73e8" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+      <circle cx="32" cy="32" r="3" fill="#1a73e8" opacity="0.9"/>
+    </svg>
+  `;
+  mapEl.appendChild(ch);
+  state.crosshair = ch;
+}
+
+function hideCrosshair() {
+  if (state.crosshair) { state.crosshair.remove(); state.crosshair = null; }
 }
 
 function placePin(lat, lng) {
@@ -293,13 +323,25 @@ function updateReportWithAnalysis(reportId, report) {
       </div>
       <div class="report-text">${report.report_text || ''}</div>
       <div class="report-meta"><span>${analysis.category||'pending'}</span><span>${time}</span></div>`;
-    card.onclick = () => { state.map.setView([report.latitude, report.longitude], 16); showAiAnalysis(report); };
+    card.onclick = () => { flyToReport(report); };
   }
   addReportToMap(report);
   const idx = state.reports.findIndex(r => r.id === reportId);
   if (idx !== -1) state.reports[idx] = report;
   showAiAnalysis(report);
   delete state.streamBuffers[reportId];
+
+  // Auto fly-to and open popup after analysis completes (critical for demo recording)
+  flyToReport(report);
+}
+
+function flyToReport(report) {
+  switchTab('map');
+  state.map.flyTo([report.latitude, report.longitude], 16, { duration: 1.2 });
+  setTimeout(() => {
+    const marker = state.markers[`r-${report.id}`];
+    if (marker) marker.openPopup();
+  }, 1400);
 }
 
 // ─── Map Markers ────────────────────────────────────
@@ -323,21 +365,8 @@ function addReportToMap(report) {
   const marker = L.marker([report.latitude, report.longitude], { icon, zIndexOffset: sev === 'critical' ? 1000 : sev === 'high' ? 500 : 0 });
   marker.addTo(state.map);
 
-  // Google Maps-style popup
-  const sevBg = { critical: '#fce8e6', high: '#fef3e0', medium: '#fef7e0', low: '#e6f4ea' }[sev] || '#f1f3f4';
-  const sevTxt = sevColor(sev);
-  marker.bindPopup(`
-    <div class="popup-card">
-      <div class="popup-header">
-        <span class="popup-id">Report #${String(report.id).padStart(3,'0')}</span>
-        <span class="popup-badge" style="background:${sevBg};color:${sevTxt}">${sev.toUpperCase()}</span>
-      </div>
-      <div class="popup-body">${(report.report_text||'').substring(0, 120)}${(report.report_text||'').length > 120 ? '...' : ''}</div>
-      ${a.summary ? `<div class="popup-summary">${a.summary}</div>` : ''}
-      ${a.recommended_action ? `<div class="popup-action">${a.recommended_action}</div>` : ''}
-      <div class="popup-coords">${report.latitude.toFixed(4)}, ${report.longitude.toFixed(4)}</div>
-    </div>
-  `, { className: 'crisis-popup', maxWidth: 300, minWidth: 220 });
+  // Enterprise popup
+  marker.bindPopup(buildPopupHTML(report, sev, a), { className: 'crisis-popup', maxWidth: 420, minWidth: 340 });
 
   state.markers[`r-${report.id}`] = marker;
 
@@ -357,6 +386,107 @@ function addReportToMap(report) {
   state.markers[`rad-${report.id}`] = radius;
 }
 
+function buildPopupHTML(report, sev, a) {
+  const sevColors = { critical:'#d93025', high:'#e8710a', medium:'#f9ab00', low:'#1e8e3e' };
+  const sevBg = { critical:'rgba(217,48,37,0.08)', high:'rgba(232,113,10,0.08)', medium:'rgba(249,171,0,0.08)', low:'rgba(30,142,62,0.08)' };
+  const sevIcon = { critical:'🔴', high:'🟠', medium:'🟡', low:'🟢' };
+  const col = sevColors[sev] || '#5f6368';
+  const p = a.priority || 0;
+
+  // Priority bar segments
+  let pbar = '';
+  for (let i = 1; i <= 10; i++) {
+    const filled = i <= p;
+    const color = filled ? (p >= 8 ? '#d93025' : p >= 5 ? '#e8710a' : '#1a73e8') : '#e8eaed';
+    pbar += `<div style="width:16px;height:4px;border-radius:2px;background:${color}"></div>`;
+  }
+
+  // Resource tags
+  const resTags = (a.resource_needs || []).map(r =>
+    `<span style="display:inline-block;font-size:10px;padding:2px 8px;border-radius:100px;background:rgba(26,115,232,0.1);color:#1a73e8;font-weight:600;margin:2px 3px 2px 0">${r}</span>`
+  ).join('');
+
+  // Risk factors
+  const riskTags = (a.risk_factors || []).map(r =>
+    `<span style="display:inline-block;font-size:10px;padding:2px 8px;border-radius:100px;background:rgba(217,48,37,0.08);color:#d93025;font-weight:600;margin:2px 3px 2px 0">${r}</span>`
+  ).join('');
+
+  const time = report.created_at ? new Date(report.created_at).toLocaleTimeString() : '';
+  const isLive = a.model_used && !a.model_used.includes('fallback');
+
+  return `
+    <div class="popup-enterprise">
+      <!-- Header band -->
+      <div class="pe-header" style="border-bottom:2px solid ${col}">
+        <div class="pe-header-left">
+          <span class="pe-icon">${sevIcon[sev] || '⚪'}</span>
+          <div>
+            <div class="pe-title">INCIDENT #${String(report.id).padStart(3,'0')}</div>
+            <div class="pe-time">${time}</div>
+          </div>
+        </div>
+        <div class="pe-severity" style="background:${sevBg[sev]};color:${col}">
+          ${sev.toUpperCase()}
+        </div>
+      </div>
+
+      <!-- Priority bar -->
+      <div class="pe-section">
+        <div class="pe-label">THREAT LEVEL</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="display:flex;gap:2px">${pbar}</div>
+          <span class="pe-priority-num" style="color:${col}">${p}/10</span>
+        </div>
+      </div>
+
+      <!-- Incident description -->
+      <div class="pe-section">
+        <div class="pe-label">SITUATION REPORT</div>
+        <div class="pe-body">${(report.report_text || '').substring(0, 180)}${(report.report_text || '').length > 180 ? '...' : ''}</div>
+      </div>
+
+      ${a.summary ? `
+      <div class="pe-section">
+        <div class="pe-label">AI TACTICAL SUMMARY</div>
+        <div class="pe-summary">${a.summary}</div>
+      </div>` : ''}
+
+      ${a.recommended_action ? `
+      <div class="pe-action-box">
+        <div class="pe-action-icon">⚡</div>
+        <div>
+          <div class="pe-label" style="margin-bottom:2px">IMMEDIATE ACTION</div>
+          <div class="pe-action-text">${a.recommended_action}</div>
+        </div>
+      </div>` : ''}
+
+      ${a.category || a.evacuation_needed ? `
+      <div class="pe-section pe-row">
+        ${a.category ? `<div><div class="pe-label">TYPE</div><div class="pe-category">${a.category}</div></div>` : ''}
+        ${a.affected_estimate > 0 ? `<div><div class="pe-label">AFFECTED</div><div class="pe-affected">${a.affected_estimate.toLocaleString()}</div></div>` : ''}
+        ${a.evacuation_needed ? `<div><div class="pe-label">EVACUATION</div><div class="pe-evac">REQUIRED</div></div>` : ''}
+      </div>` : ''}
+
+      ${resTags ? `
+      <div class="pe-section">
+        <div class="pe-label">RESOURCES REQUIRED</div>
+        <div class="pe-tags">${resTags}</div>
+      </div>` : ''}
+
+      ${riskTags ? `
+      <div class="pe-section">
+        <div class="pe-label">RISK FACTORS</div>
+        <div class="pe-tags">${riskTags}</div>
+      </div>` : ''}
+
+      <!-- Footer -->
+      <div class="pe-footer">
+        <span>${report.latitude.toFixed(5)}, ${report.longitude.toFixed(5)}</span>
+        <span>${isLive ? '● Gemma 4 E2B' : '○ Keyword Triage'}${a.inference_time_ms ? ' · ' + a.inference_time_ms + 'ms' : ''}</span>
+      </div>
+    </div>`;
+}
+
 function sevColor(s) {
   return { critical: '#d93025', high: '#e8710a', medium: '#f9ab00', low: '#1e8e3e' }[s] || '#5f6368';
 }
@@ -373,7 +503,7 @@ function addReportToList(report) {
   const t = report.created_at ? new Date(report.created_at).toLocaleTimeString() : '';
   const card = document.createElement('div');
   card.className = `report-card severity-${sev}`; card.id = `report-card-${report.id}`;
-  card.onclick = () => { state.map.setView([report.latitude, report.longitude], 16); showAiAnalysis(report); };
+  card.onclick = () => { flyToReport(report); showAiAnalysis(report); };
   card.innerHTML = `<div class="report-header"><span class="report-id">#${String(report.id).padStart(3,'0')}</span><span class="severity-badge ${sev}">${sev}</span></div>
     <div class="report-text">${report.report_text||''}</div>
     <div class="report-meta"><span>${a.category||'pending'}</span><span>${t}</span></div>`;
