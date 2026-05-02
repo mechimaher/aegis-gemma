@@ -22,11 +22,6 @@ DEMO_SCENARIOS = [
         "report_text": "Building collapse at Al Corniche intersection. Structural failure in 6-story residential building. Estimated 25 residents trapped. Dust cloud reducing visibility. Adjacent buildings showing stress fractures.",
     },
     {
-        "latitude": 25.2920,
-        "longitude": 51.5200,
-        "report_text": "Flash flooding on Salwa Road. Water level at 1.2 meters and rising. 40+ vehicles stranded including a school bus with 30 children. Storm drain system overwhelmed. Power lines down in water.",
-    },
-    {
         "latitude": 25.2750,
         "longitude": 51.5450,
         "report_text": "Industrial fire at warehouse complex in Industrial Area. Chemical storage facility involved. Toxic smoke plume drifting northeast toward residential zone. 3 workers injured, 2 unaccounted for.",
@@ -35,21 +30,6 @@ DEMO_SCENARIOS = [
         "latitude": 25.3000,
         "longitude": 51.5100,
         "report_text": "Mass casualty incident at sports stadium. Crowd crush during evacuation. Approximately 50 people injured, 12 in critical condition. Medical facilities overwhelmed. Need additional ambulances and field hospitals.",
-    },
-    {
-        "latitude": 25.2800,
-        "longitude": 51.5500,
-        "report_text": "Road blocked by debris at Pearl Island access bridge. Earthquake aftershock caused partial bridge deck separation. 200+ residents isolated on island. No vehicular access. Need marine or air evacuation assessment.",
-    },
-    {
-        "latitude": 25.2650,
-        "longitude": 51.5250,
-        "report_text": "Power grid failure across Musheireb district. Complete blackout affecting hospital, school, and 500 residential units. Backup generators at hospital running on 4 hours of fuel. Diabetic patients need refrigerated insulin supply.",
-    },
-    {
-        "latitude": 25.3100,
-        "longitude": 51.5380,
-        "report_text": "Gas pipeline rupture near Lusail construction site. Active gas leak with ignition risk. 200-meter exclusion zone established. 3 construction crews (45 workers) being evacuated. Wind carrying gas toward metro station.",
     },
 ]
 
