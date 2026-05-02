@@ -31,6 +31,10 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
         Situation Briefing
       </button>
+      <button class="tab-btn" id="tab-proximity" onclick="switchTab('proximity')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M8.12 8.12L15.88 15.88"/><circle cx="18" cy="6" r="3"/><path d="M15.88 8.12L8.12 15.88"/><circle cx="6" cy="18" r="3"/></svg>
+        Proximity Intel
+      </button>
       <button class="tab-btn" id="tab-demo" onclick="runDemo()" title="Auto-play full demo (Ctrl+Shift+D)">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         Demo
@@ -102,6 +106,23 @@
         <div class="briefing-content" id="briefing-content">
           <div class="briefing-empty">
             <p>Generate a briefing to get an AI-powered synthesis of all active incidents, resource needs, and cascading risk analysis.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="proximity-view" class="view">
+      <div class="briefing-container">
+        <div class="briefing-header">
+          <h2>Proximity Intelligence</h2>
+          <p>Gemma 4 E2B analyzes spatial relationships between nearby incidents — identifying cascade risks, resource sharing opportunities, and evacuation route conflicts.</p>
+        </div>
+        <button class="btn btn-primary briefing-btn" id="btn-proximity" onclick="runProximityAnalysis()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M8.12 8.12L15.88 15.88"/></svg>
+          Analyze Proximity
+        </button>
+        <div class="briefing-content" id="proximity-content">
+          <div class="briefing-empty">
+            <p>Run proximity analysis to discover spatial correlations between active incidents, optimizing resource deployment and identifying cascading hazards.</p>
           </div>
         </div>
       </div>

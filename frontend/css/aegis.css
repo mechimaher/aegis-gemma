@@ -327,4 +327,54 @@ body { font-family: var(--font-sans); background: var(--surface-1); color: var(-
 .briefing-stream-terminal::-webkit-scrollbar-track { background: #0d1117; }
 .briefing-stream-terminal::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
 
+/* ── Proximity Intelligence ──────────────── */
+.proximity-streaming { padding: 16px; }
+.prox-header-row { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--on-surface); margin-bottom: 12px; }
+.prox-stream {
+  background: #0d1117; color: #c9d1d9; padding: 14px; font-family: var(--font-mono);
+  font-size: 12px; line-height: 1.6; min-height: 120px; max-height: 300px; overflow-y: auto;
+  white-space: pre-wrap; word-wrap: break-word; border-radius: var(--radius-sm);
+}
+
+.prox-results { padding: 0; }
+.prox-summary-bar {
+  display: flex; justify-content: space-between; padding: 12px 20px;
+  font-size: 11px; color: var(--on-surface-dim); border-bottom: 1px solid var(--outline-variant);
+  font-family: var(--font-mono); letter-spacing: 0.3px;
+}
+
+.prox-card {
+  padding: 14px 20px; border-bottom: 1px solid var(--outline-variant);
+  transition: background 0.15s;
+}
+.prox-card:hover { background: rgba(26,115,232,0.03); }
+.prox-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.prox-pair-ids { display: flex; align-items: center; gap: 6px; }
+.prox-id { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--on-surface); }
+.prox-meta { display: flex; gap: 12px; align-items: center; }
+.prox-dist { font-family: var(--font-mono); font-size: 12px; color: var(--on-surface-dim); font-weight: 600; }
+.prox-risk { font-size: 10px; font-weight: 800; letter-spacing: 1px; }
+.prox-card-types { display: flex; gap: 8px; margin-bottom: 8px; }
+.prox-type {
+  font-size: 10px; padding: 2px 10px; border-radius: 100px;
+  background: var(--surface-1); color: var(--on-surface-dim);
+  font-weight: 600; text-transform: capitalize;
+}
+.prox-insight { font-size: 12px; color: var(--on-surface); line-height: 1.5; margin-bottom: 6px; }
+.prox-action {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: var(--g-teal); font-weight: 600; line-height: 1.4;
+}
+
+/* Distance labels on map */
+.prox-dist-label { background: none !important; border: none !important; box-shadow: none !important; }
+.prox-dist-label span {
+  display: inline-block; font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+  color: white; background: rgba(95,99,104,0.85); padding: 2px 6px; border-radius: 3px;
+  letter-spacing: 0.3px; white-space: nowrap;
+}
+
+/* Proximity tooltips */
+.prox-tooltip { font-family: var(--font-sans) !important; font-size: 12px !important; max-width: 260px !important; }
+
 @media (max-width: 1100px) { #app { grid-template-columns: 1fr; } #left-panel, #right-panel { display: none; } }

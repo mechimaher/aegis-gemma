@@ -6,9 +6,11 @@ const state = {
   map: null, markers: {}, pinMode: false, pendingPin: null,
   ws: null, wsRetries: 0, reports: [], reportIds: new Set(),
   submittingId: null, heartbeatTimer: null,
-  streamBuffers: {}, // per-report token buffers
+  streamBuffers: {},
   recognition: null, isListening: false,
-  crosshair: null, // pin-mode crosshair overlay
+  crosshair: null,
+  proximityLines: [],
+  proximityBuffer: '',
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -21,8 +23,11 @@ document.addEventListener('DOMContentLoaded', () => {
 function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.getElementById('tab-' + tab).classList.add('active');
-  document.getElementById(tab === 'map' ? 'map-view' : 'briefing-view').classList.add('active');
+  const tabEl = document.getElementById('tab-' + tab);
+  if (tabEl) tabEl.classList.add('active');
+  const viewMap = { map: 'map-view', briefing: 'briefing-view', proximity: 'proximity-view' };
+  const viewEl = document.getElementById(viewMap[tab]);
+  if (viewEl) viewEl.classList.add('active');
   if (tab === 'map') setTimeout(() => state.map?.invalidateSize(), 100);
 }
 
@@ -676,6 +681,17 @@ function handleWS(msg) {
       document.getElementById('briefing-content').innerHTML = '<p class="error">Briefing generation failed.</p>';
       document.getElementById('btn-briefing').disabled = false;
       showToast('Briefing failed: ' + (msg.error || 'unknown'), 'error'); break;
+    // ─── Proximity Intelligence ─────────────────────
+    case 'proximity_started':
+      onProximityStarted(msg); break;
+    case 'proximity_token':
+      onProximityToken(msg.token); break;
+    case 'proximity_complete':
+      onProximityComplete(msg); break;
+    case 'proximity_failed':
+      document.getElementById('proximity-content').innerHTML = '<p class="error">Proximity analysis failed.</p>';
+      document.getElementById('btn-proximity').disabled = false;
+      showToast('Proximity analysis failed', 'error'); break;
   }
 }
 
@@ -815,3 +831,147 @@ document.addEventListener('keydown', (e) => {
     runDemo();
   }
 });
+
+// ─── Proximity Intelligence (Gemma Feature #3) ─────
+
+async function runProximityAnalysis() {
+  const btn = document.getElementById('btn-proximity');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Analyzing Proximity...';
+
+  const content = document.getElementById('proximity-content');
+  content.innerHTML = `
+    <div class="proximity-streaming">
+      <div class="prox-header-row">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--g-blue)" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M8.12 8.12L15.88 15.88"/></svg>
+        <span>Gemma 4 analyzing spatial correlations...</span>
+      </div>
+      <div class="prox-stream" id="proximity-stream"><span class="cursor-blink">|</span></div>
+    </div>`;
+
+  state.proximityBuffer = '';
+
+  try {
+    const res = await fetch('/api/proximity-analysis', { method: 'POST' });
+    const data = await res.json();
+    if (data.status === 'error') {
+      content.innerHTML = `<div class="briefing-empty"><p>${data.message}</p></div>`;
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M8.12 8.12L15.88 15.88"/></svg> Analyze Proximity';
+    }
+  } catch (err) {
+    content.innerHTML = '<p class="error">Failed to start proximity analysis.</p>';
+    btn.disabled = false;
+  }
+}
+
+function onProximityStarted(msg) {
+  showToast(`Analyzing ${msg.pair_count} incident pairs...`, 'info');
+  // Draw initial distance lines on map (before AI insights)
+  clearProximityLines();
+  (msg.pairs || []).forEach(p => {
+    const line = L.polyline(
+      [[p.from_lat, p.from_lng], [p.to_lat, p.to_lng]],
+      { color: '#5f6368', weight: 2, dashArray: '8 6', opacity: 0.5, className: 'proximity-line-pending' }
+    ).addTo(state.map);
+    // Distance label at midpoint
+    const midLat = (p.from_lat + p.to_lat) / 2;
+    const midLng = (p.from_lng + p.to_lng) / 2;
+    const label = L.marker([midLat, midLng], {
+      icon: L.divIcon({
+        className: 'prox-dist-label',
+        html: `<span>${p.distance_m >= 1000 ? (p.distance_m/1000).toFixed(1)+'km' : p.distance_m+'m'}</span>`,
+        iconSize: [60, 20], iconAnchor: [30, 10],
+      }),
+      interactive: false,
+    }).addTo(state.map);
+    state.proximityLines.push(line, label);
+  });
+}
+
+function onProximityToken(token) {
+  state.proximityBuffer += token;
+  const el = document.getElementById('proximity-stream');
+  if (el) {
+    el.innerHTML = formatStreamText(state.proximityBuffer) + '<span class="cursor-blink">|</span>';
+    el.scrollTop = el.scrollHeight;
+  }
+}
+
+function onProximityComplete(msg) {
+  const btn = document.getElementById('btn-proximity');
+  btn.disabled = false;
+  btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M8.12 8.12L15.88 15.88"/></svg> Analyze Proximity';
+
+  const pairs = msg.pairs || [];
+  const content = document.getElementById('proximity-content');
+
+  // Build results HTML
+  const riskColors = { critical: '#d93025', high: '#e8710a', medium: '#f9ab00', low: '#1e8e3e' };
+
+  let cardsHtml = pairs.map((p, i) => {
+    const col = riskColors[p.risk_level] || '#5f6368';
+    const distLabel = p.distance_m >= 1000 ? (p.distance_m/1000).toFixed(1)+' km' : p.distance_m+' m';
+    return `
+      <div class="prox-card" style="border-left: 3px solid ${col}">
+        <div class="prox-card-header">
+          <div class="prox-pair-ids">
+            <span class="prox-id">#${String(p.from_id).padStart(3,'0')}</span>
+            <svg width="16" height="12" viewBox="0 0 24 12" fill="none" stroke="${col}" stroke-width="2"><path d="M2 6h20M18 2l4 4-4 4"/></svg>
+            <span class="prox-id">#${String(p.to_id).padStart(3,'0')}</span>
+          </div>
+          <div class="prox-meta">
+            <span class="prox-dist">${distLabel}</span>
+            <span class="prox-risk" style="color:${col}">${(p.risk_level||'medium').toUpperCase()}</span>
+          </div>
+        </div>
+        <div class="prox-card-types">
+          <span class="prox-type">${p.from_cat||'—'}</span>
+          <span class="prox-type">${p.to_cat||'—'}</span>
+        </div>
+        ${p.ai_insight ? `<div class="prox-insight">${p.ai_insight}</div>` : ''}
+        ${p.action ? `<div class="prox-action"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#00897b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> ${p.action}</div>` : ''}
+      </div>`;
+  }).join('');
+
+  content.innerHTML = `
+    <div class="prox-results">
+      <div class="prox-summary-bar">
+        <span>${pairs.length} spatial correlations analyzed</span>
+        <span>Gemma 4 · ${msg.inference_time_ms ? (msg.inference_time_ms/1000).toFixed(1)+'s' : '—'} · ${msg.tokens_used||0} tokens</span>
+      </div>
+      ${cardsHtml}
+    </div>`;
+
+  // Update map lines with risk colors
+  clearProximityLines();
+  pairs.forEach(p => {
+    const col = riskColors[p.risk_level] || '#5f6368';
+    const line = L.polyline(
+      [[p.from_lat, p.from_lng], [p.to_lat, p.to_lng]],
+      { color: col, weight: 2.5, dashArray: p.risk_level === 'critical' ? '' : '10 6', opacity: 0.7 }
+    ).addTo(state.map);
+    line.bindTooltip(
+      `<b>#${p.from_id} ↔ #${p.to_id}</b><br>${p.distance_m}m · ${(p.risk_level||'').toUpperCase()}<br><em>${(p.ai_insight||'').substring(0,80)}</em>`,
+      { sticky: true, className: 'prox-tooltip' }
+    );
+    const midLat = (p.from_lat + p.to_lat) / 2;
+    const midLng = (p.from_lng + p.to_lng) / 2;
+    const label = L.marker([midLat, midLng], {
+      icon: L.divIcon({
+        className: 'prox-dist-label',
+        html: `<span style="background:${col}">${p.distance_m >= 1000 ? (p.distance_m/1000).toFixed(1)+'km' : p.distance_m+'m'}</span>`,
+        iconSize: [60, 20], iconAnchor: [30, 10],
+      }),
+      interactive: false,
+    }).addTo(state.map);
+    state.proximityLines.push(line, label);
+  });
+
+  showToast(`Proximity: ${pairs.length} correlations · ${msg.inference_time_ms ? (msg.inference_time_ms/1000).toFixed(1)+'s' : '—'}`, 'success');
+}
+
+function clearProximityLines() {
+  state.proximityLines.forEach(l => state.map.removeLayer(l));
+  state.proximityLines = [];
+}

@@ -440,6 +440,210 @@ async def list_resources():
     return {"status": "success", "resources": resources, "count": len(resources)}
 
 
+# ─── Routes: Proximity Intelligence (Gemma Feature #3) ────
+
+import math
+
+def _haversine_m(lat1, lon1, lat2, lon2):
+    """Calculate distance in meters between two coordinates."""
+    R = 6371000
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlam = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlam / 2) ** 2
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+@app.post("/api/proximity-analysis")
+async def run_proximity_analysis():
+    """
+    Gemma Feature #3: Cross-incident proximity intelligence.
+    Identifies nearby incident pairs and uses Gemma to analyze
+    cascade risks, resource sharing, and evacuation conflicts.
+    """
+    reports = await get_all_reports()
+    if len(reports) < 2:
+        return {"status": "error", "message": "Need at least 2 reports for proximity analysis"}
+
+    # Calculate all pairwise distances
+    pairs = []
+    for i, r1 in enumerate(reports):
+        for r2 in reports[i + 1:]:
+            dist = _haversine_m(r1["latitude"], r1["longitude"],
+                                r2["latitude"], r2["longitude"])
+            if dist < 5000:  # Within 5km
+                a1 = r1.get("ai_analysis", {}) or {}
+                a2 = r2.get("ai_analysis", {}) or {}
+                pairs.append({
+                    "from_id": r1["id"], "to_id": r2["id"],
+                    "distance_m": round(dist),
+                    "from_lat": r1["latitude"], "from_lng": r1["longitude"],
+                    "to_lat": r2["latitude"], "to_lng": r2["longitude"],
+                    "from_sev": a1.get("severity", "unknown"),
+                    "to_sev": a2.get("severity", "unknown"),
+                    "from_cat": a1.get("category", "unknown"),
+                    "to_cat": a2.get("category", "unknown"),
+                    "from_text": (r1.get("report_text", ""))[:80],
+                    "to_text": (r2.get("report_text", ""))[:80],
+                })
+
+    pairs.sort(key=lambda p: p["distance_m"])
+    top_pairs = pairs[:6]  # Limit to 6 closest pairs
+
+    if not top_pairs:
+        return {"status": "success", "pairs": [], "message": "No nearby incident pairs found"}
+
+    if not is_model_loaded():
+        # Fallback: return pairs with basic distance info
+        for p in top_pairs:
+            p["ai_insight"] = f"Incidents {p['distance_m']}m apart. Manual assessment recommended."
+            p["risk_level"] = "medium"
+        return {"status": "success", "pairs": top_pairs, "model_used": "fallback"}
+
+    # Build compact prompt for Gemma
+    pair_descs = []
+    for i, p in enumerate(top_pairs):
+        pair_descs.append(
+            f"P{i+1}: #{p['from_id']}({p['from_sev']},{p['from_cat']}) <-> "
+            f"#{p['to_id']}({p['to_sev']},{p['to_cat']}) = {p['distance_m']}m"
+        )
+
+    prompt = (
+        "You are AEGIS crisis AI. Analyze spatial relationships between nearby incidents.\n\n"
+        f"Incident pairs within 5km:\n" + "\n".join(pair_descs) + "\n\n"
+        "Reply ONLY with a JSON array. For each pair:\n"
+        '[{"pair":"P1","risk_level":"critical/high/medium/low",'
+        '"insight":"1 sentence: cascade risk, resource sharing, or evacuation conflict",'
+        '"action":"1 sentence recommended coordination action"}]\n'
+        "Be specific about WHY proximity matters for each pair."
+    )
+
+    # Launch streaming in background
+    asyncio.create_task(_stream_proximity(prompt, top_pairs))
+
+    return {
+        "status": "streaming",
+        "message": "Proximity analysis started. Results streaming via WebSocket.",
+        "pair_count": len(top_pairs),
+    }
+
+
+async def _stream_proximity(prompt: str, pairs: list):
+    """Background task: stream proximity analysis via WebSocket."""
+    import time as _time
+
+    try:
+        await manager.broadcast({
+            "type": "proximity_started",
+            "pair_count": len(pairs),
+            "pairs": pairs,
+        })
+
+        token_queue = asyncio.Queue()
+        loop = asyncio.get_event_loop()
+
+        def on_token(token: str):
+            asyncio.run_coroutine_threadsafe(token_queue.put(token), loop)
+
+        def _run_streaming():
+            with gemma_engine._inference_lock:
+                start = _time.time()
+                stream = gemma_engine._llm.create_chat_completion(
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=512,
+                    temperature=0.15,
+                    top_p=0.85,
+                    repeat_penalty=1.15,
+                    stream=True,
+                )
+                chunks = []
+                for chunk in stream:
+                    delta = chunk["choices"][0].get("delta", {})
+                    token = delta.get("content", "")
+                    if token:
+                        chunks.append(token)
+                        on_token(token)
+                elapsed = _time.time() - start
+            return "".join(chunks).strip(), int(elapsed * 1000), len(chunks)
+
+        _pool = ThreadPoolExecutor(max_workers=1)
+        inference_future = loop.run_in_executor(_pool, _run_streaming)
+
+        token_count = 0
+        while not inference_future.done() or not token_queue.empty():
+            try:
+                token = await asyncio.wait_for(token_queue.get(), timeout=0.5)
+                token_count += 1
+                await manager.broadcast({
+                    "type": "proximity_token",
+                    "token": token,
+                    "n": token_count,
+                })
+            except asyncio.TimeoutError:
+                continue
+
+        raw_text, time_ms, chunks = await inference_future
+        _pool.shutdown(wait=False)
+
+        # Parse the AI response into per-pair insights
+        insights = _parse_proximity_response(raw_text, pairs)
+
+        await manager.broadcast({
+            "type": "proximity_complete",
+            "pairs": insights,
+            "inference_time_ms": time_ms,
+            "tokens_used": chunks,
+        })
+
+        logger.info(f"Proximity analysis: {time_ms}ms | {chunks} tokens | {len(pairs)} pairs")
+
+    except Exception as e:
+        logger.error(f"Proximity analysis failed: {e}", exc_info=True)
+        await manager.broadcast({
+            "type": "proximity_failed",
+            "error": str(e),
+        })
+
+
+def _parse_proximity_response(raw_text: str, pairs: list) -> list:
+    """Parse Gemma's proximity analysis response and merge with pair data."""
+    from backend.gemma_engine import _parse_crisis_json
+
+    text = raw_text.strip()
+    # Strip markdown fences
+    if text.startswith("```json"):
+        text = text[7:]
+    elif text.startswith("```"):
+        text = text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    text = text.strip()
+
+    try:
+        insights_list = json.loads(text)
+        if isinstance(insights_list, list):
+            for i, pair in enumerate(pairs):
+                if i < len(insights_list):
+                    ins = insights_list[i]
+                    pair["risk_level"] = ins.get("risk_level", "medium")
+                    pair["ai_insight"] = ins.get("insight", "")
+                    pair["action"] = ins.get("action", "")
+                else:
+                    pair["risk_level"] = "medium"
+                    pair["ai_insight"] = "Analysis pending."
+                    pair["action"] = ""
+            return pairs
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    # Fallback: assign generic insights
+    for pair in pairs:
+        pair["risk_level"] = "high" if pair["distance_m"] < 1500 else "medium"
+        pair["ai_insight"] = f"Incidents {pair['distance_m']}m apart — coordinate response."
+        pair["action"] = "Deploy shared resources between locations."
+    return pairs
+
+
 # ─── Routes: Dashboard & System ───────────────────────────
 
 @app.get("/api/dashboard")
