@@ -21,7 +21,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from math import floor, log, tan, pi, cos
 
 # ─── Configuration ───────────────────────────────────
-TILE_URL = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"
+TILE_URL = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"
 SUBDOMAINS = ["a", "b", "c", "d"]
 USER_AGENT = "Aegis-Gemma/1.0 Offline Tile Cacher"
 

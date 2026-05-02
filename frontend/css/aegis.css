@@ -105,12 +105,12 @@ body { font-family: var(--font-sans); background: var(--surface-1); color: var(-
 #main-content { position: relative; overflow: hidden; }
 .view { display: none; width: 100%; height: 100%; }
 .view.active { display: block; }
-#map { width: 100%; height: 100%; background: #2d333b; z-index: 1; }
+#map { width: 100%; height: 100%; background: #e8eaed; z-index: 1; }
 
-/* Tile treatment: brighten dark tiles for professional light-grey tactical look */
-.map-tiles { filter: brightness(1.65) contrast(0.95) saturate(0.7); }
+/* Tile treatment: light Positron tiles with subtle tactical styling */
+.map-tiles { filter: contrast(1.05) saturate(0.8); }
 
-.leaflet-container { background: #2d333b !important; }
+.leaflet-container { background: #e8eaed !important; }
 .leaflet-control-zoom { border: none !important; box-shadow: var(--elevation-2) !important; border-radius: var(--radius-sm) !important; overflow: hidden; }
 .leaflet-control-zoom a { background: var(--surface-0) !important; color: var(--on-surface) !important; border: none !important; border-bottom: 1px solid var(--outline) !important; width: 32px !important; height: 32px !important; line-height: 32px !important; font-size: 16px !important; }
 .leaflet-control-zoom a:last-child { border-bottom: none !important; }
