@@ -852,6 +852,33 @@ async function runDemo() {
   }
 
   await sleep(2000);
+  showToast('▶ Briefing complete. Running Proximity Intelligence...', 'info');
+  await sleep(2000);
+
+  // Step 9: Switch to proximity tab
+  switchTab('proximity');
+  await sleep(1500);
+
+  // Step 10: Run proximity analysis
+  document.getElementById('btn-proximity').click();
+  showToast('▶ Gemma 4 analyzing spatial correlations...', 'info');
+
+  // Wait for proximity to complete
+  waited = 0;
+  while (waited < maxWait) {
+    await sleep(3000);
+    waited += 3000;
+    if (!document.getElementById('btn-proximity').disabled) break;
+  }
+
+  await sleep(2000);
+  showToast('▶ Switching to map to view proximity network...', 'info');
+  await sleep(1500);
+
+  // Step 11: Switch back to map to show proximity lines
+  switchTab('map');
+  await sleep(3000);
+
   showToast('▶ Demo complete. AEGIS-GEMMA ready for deployment.', 'success');
   demoRunning = false;
 }
