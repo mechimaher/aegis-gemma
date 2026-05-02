@@ -12,9 +12,20 @@ Every existing crisis AI tool fails at this exact moment because they depend on 
 
 **AEGIS-GEMMA doesn't.**
 
-## How It Works
+## Three Gemma-Powered Intelligence Features
 
-AEGIS-GEMMA is a self-contained tactical intelligence system that runs entirely on a single laptop:
+AEGIS-GEMMA leverages Gemma 4 E2B in three distinct ways, each demonstrating a different dimension of on-device AI capability:
+
+### Feature 1: Real-Time Report Analysis
+Individual crisis reports are analyzed by Gemma 4 with token-by-token streaming. Each report receives structured JSON output: severity classification, priority score (1-10), required resources, evacuation assessment, risk factors, and recommended immediate action.
+
+### Feature 2: Situation Briefing Synthesis
+With one click, Gemma 4 reads ALL active crisis reports and streams a unified commander's briefing covering situation overview, critical priorities, resource allocation, and cascading risk assessment. This is cross-incident analytical reasoning — not a simple summary.
+
+### Feature 3: Proximity Intelligence
+Gemma 4 analyzes spatial relationships between nearby incidents using haversine distance calculations. For every pair of incidents within 5km, the AI identifies cascade risks, resource-sharing opportunities, and evacuation route conflicts. Results render as risk-colored connector lines on the tactical map with per-pair insight cards.
+
+## How It Works
 
 ```
 Operator → Drops pin on offline map → Describes incident (text or voice)
@@ -42,16 +53,6 @@ The report is persisted to SQLite and classified using keyword analysis. The HTT
 **Phase 2 — Deep AI Analysis (background):**
 Gemma 4 E2B runs in a `ThreadPoolExecutor` to avoid blocking FastAPI's event loop. Each token is streamed via WebSocket to the operator's browser in real-time. The dashboard remains fully responsive during inference — polling, map interaction, and new report submission all continue uninterrupted.
 
-### Situation Briefing — Multi-Report Synthesis
-
-With one click, Gemma 4 reads ALL active crisis reports and streams a unified commander's briefing token-by-token in real-time:
-- **Situation Overview** — Overall threat assessment
-- **Critical Priorities** — Numbered immediate actions
-- **Resource Allocation** — Where to deploy first
-- **Cascading Risk Assessment** — How incidents interact
-
-This is not a simple summary — it's cross-incident analytical reasoning. Streaming the output live means commanders can begin reading intelligence immediately, and the AI's reasoning process is fully transparent.
-
 ## Architecture
 
 ```
@@ -71,7 +72,7 @@ This is not a simple summary — it's cross-incident analytical reasoning. Strea
 │  ┌──────┴───────┐              ┌──────────▼─────────────┐  │
 │  │  Local Tile  │              │   Gemma 4 E2B          │  │
 │  │  Cache (PNG) │              │   Q4_K_M GGUF (3.3 GB) │  │
-│  │              │              │   via llama-cpp-python │  │
+│  │  Positron    │              │   via llama-cpp-python │  │
 │  └──────────────┘              └──────────┬─────────────┘  │
 │                                           │                │
 │                    ┌──────────────────────┘                │
@@ -80,7 +81,6 @@ This is not a simple summary — it's cross-incident analytical reasoning. Strea
 │  │                  SQLite (aiosqlite)                 │   │
 │  │  reports │ resources │ events │ ai_analysis (JSON)  │   │
 │  └─────────────────────────────────────────────────────┘   │
-│                                                            │
 │                                                            │
 └────────────────────────────────────────────────────────────┘
 ```
@@ -96,18 +96,24 @@ Gemma 4 is prompted to produce structured JSON with specific fields (`severity`,
 ### 3. Real-Time Token Visualization
 Every token Gemma generates appears in a terminal-style display with JSON syntax highlighting (blue keys, green strings, yellow numbers). This serves two purposes: (1) it shows the AI's reasoning process transparently (addressing the Safety & Trust criterion), and (2) it provides immediate visual feedback that the system is working, even during long inference runs.
 
-### 4. Impact Zone Mapping
+### 4. Spatial Proximity Analysis
+The system calculates haversine distances between all incident pairs and sends nearby pairs (< 5km) to Gemma for cross-correlation analysis. The AI identifies cascade risks (e.g., fire near gas pipeline), resource-sharing opportunities (e.g., shared ambulance corridors), and evacuation conflicts (e.g., overlapping evacuation routes). Results render as risk-colored connector lines on the map with interactive tooltips.
+
+### 5. Impact Zone Mapping
 Each crisis marker on the map is surrounded by a severity-scaled impact radius circle (critical: 400m, high: 300m, medium: 200m, low: 120m). Markers are sized by severity (critical markers are 75% larger than low-severity ones). A professional severity legend provides instant visual decoding. This transforms the map from a pin collection into a tactical common operating picture.
 
-### 5. Complete Air-Gap Compliance
+### 6. Event Lifecycle Management
+Every incident tracks its lifecycle state: **ACTIVE** (< 6 hours, green pulse indicator), **MONITORING** (6-24 hours, amber), or **RESOLVED** (> 24 hours, grey). Elapsed time is displayed on each report card and auto-refreshes every 30 seconds. This demonstrates production-grade event management maturity.
+
+### 7. Complete Air-Gap Compliance
 The system makes **zero external network calls**:
 - All fonts bundled locally (Inter, JetBrains Mono)
 - Leaflet.js served from local files
-- Map tiles cached locally
+- Map tiles cached locally (CartoDB Positron, zoom 10-16)
 - No CDN, no analytics, no telemetry
 - No `fetch()` to any external domain
 
-> **Note on Voice Input:** The Web Speech API is a browser-native feature that works offline on Chromium with OS-level language packs installed. On systems without offline speech packs, Chrome may route audio to Google's servers. For guaranteed air-gap compliance, install the `English (US)` offline speech pack in your OS settings, or disable voice input. A future enhancement would integrate `whisper.cpp` for fully local transcription.
+> **Note on Voice Input:** The Web Speech API is a browser-native feature that works offline on Chromium with OS-level language packs installed. On systems without offline speech packs, Chrome may route audio to Google's servers. For guaranteed air-gap compliance, install the `English (US)` offline speech pack in your OS settings, or disable voice input.
 
 ## Technology Stack
 
@@ -118,7 +124,7 @@ The system makes **zero external network calls**:
 | **Backend** | Python 3.12, FastAPI, uvicorn | Async-native, WebSocket support |
 | **Database** | SQLite via aiosqlite | Zero-config, single-file persistence |
 | **Frontend** | Vanilla HTML/CSS/JS (zero frameworks) | No build step, instant deployment |
-| **Maps** | Leaflet.js (locally bundled) | Lightweight, offline-capable |
+| **Maps** | Leaflet.js (locally bundled) + CartoDB Positron tiles | Lightweight, offline-capable |
 | **Streaming** | Native WebSocket | Real-time bidirectional communication |
 | **Voice** | Web Speech API (browser-native) | No external dependency |
 
@@ -139,7 +145,7 @@ pip install huggingface-hub
 huggingface-cli download bartowski/google_gemma-4-E2B-it-GGUF \
   google_gemma-4-E2B-it-Q4_K_M.gguf --local-dir ./models/
 
-# 4. Seed demo crisis scenarios
+# 4. Seed demo crisis scenarios (3 incidents, Gemma-analyzed)
 python3 seed_demo.py
 
 # 5. Launch
@@ -150,23 +156,24 @@ Open **http://localhost:8080** in any modern browser.
 
 ## Demo Walkthrough
 
-1. **Dashboard loads** — 7 pre-seeded Doha crisis scenarios appear on the tactical map with severity-colored markers and impact zones
-2. **Drop a pin** — Click "Drop Crisis Pin", click the map, describe the incident
-3. **Submit & Analyze** — Instant triage classifies the report; Gemma 4 begins streaming analysis tokens in real-time
-4. **AI Analysis** — Structured results appear: severity, priority bar, tactical summary, immediate action, required resources, risk factors
-5. **Situation Briefing** — Switch to the briefing tab, click "Generate Briefing" — Gemma synthesizes ALL reports into a commander's overview
+AEGIS-GEMMA includes a one-click automated demo (`▶ Demo` button or `Ctrl+Shift+D`) that showcases all three Gemma features in sequence:
+
+1. **Tactical Map** — 3 pre-seeded Doha crisis scenarios appear with severity-colored markers, impact zones, and ACTIVE lifecycle indicators
+2. **Drop a Pin** — Automated pin drop with typewriter-effect incident description
+3. **AI Analysis** — Gemma 4 streams structured JSON analysis token-by-token in real-time
+4. **Situation Briefing** — Gemma synthesizes ALL reports into a unified commander's overview
+5. **Proximity Intelligence** — Gemma analyzes spatial correlations between nearby incidents
+6. **Map Return** — Risk-colored connector lines with distance labels appear between correlated incidents
 
 ### Demo Scenarios (Pre-seeded)
 
-| # | Scenario | Severity |
-|---|----------|----------|
-| 1 | Building collapse — 6-story residential | CRITICAL |
-| 2 | Flash flooding — 40+ vehicles stranded | HIGH |
-| 3 | Industrial chemical fire — toxic plume | CRITICAL |
-| 4 | Mass casualty — stadium crowd crush | CRITICAL |
-| 5 | Bridge damage — Pearl Island isolated | HIGH |
-| 6 | Power grid failure — hospital blackout | HIGH |
-| 7 | Gas pipeline rupture — metro construction | CRITICAL |
+| # | Scenario | Category | Severity |
+|---|----------|----------|----------|
+| 1 | Building collapse — Al Corniche, 25 trapped | Infrastructure | CRITICAL |
+| 2 | Industrial chemical fire — toxic smoke plume | Fire/Evacuation | CRITICAL |
+| 3 | Mass casualty — stadium crowd crush, 50 injured | Medical | CRITICAL |
+
+All three incidents are within 5km of each other in the Doha metro area, enabling proximity analysis to identify cascade risks and resource-sharing opportunities.
 
 ## Performance Benchmarks
 
@@ -176,29 +183,47 @@ Open **http://localhost:8080** in any modern browser.
 | Model load time | 2–8s (hardware dependent) |
 | Inference (Report JSON) | 40–80s on CPU |
 | Inference (Briefing text) | 35–95s on CPU |
-| Token throughput | 2.0–3.0 tokens/sec (CPU) |
+| Inference (Proximity analysis) | 40–90s on CPU |
+| Token throughput | 2.0–4.5 tokens/sec (CPU) |
 | Concurrent WebSocket clients | Tested up to 10 |
 | Database (SQLite) | < 1ms per query |
 | Total RAM usage | ~4.5 GB |
+| Tile cache | 3,215 tiles (zoom 10-16, Doha region) |
 
 ## Project Structure
 
 ```
-gemma/
+aegis-gemma/
 ├── backend/
-│   ├── server.py          # FastAPI app, WebSocket, API routes
+│   ├── server.py          # FastAPI app, WebSocket, API routes, proximity analysis
 │   ├── gemma_engine.py    # Gemma inference, streaming, JSON parsing
 │   └── database.py        # SQLite schema, async CRUD operations
 ├── frontend/
-│   ├── index.html         # Single-page application
-│   ├── css/aegis.css      # Design system
-│   └── js/aegis.js        # Map, streaming, briefing logic
+│   ├── index.html         # Single-page application (3 tabs)
+│   ├── css/aegis.css      # Design system, event lifecycle, proximity styles
+│   └── js/aegis.js        # Map, streaming, briefing, proximity, demo automation
 ├── models/                # Gemma 4 GGUF model files
-├── tiles/                 # Offline map tile cache
-├── static/                # Fonts, Leaflet.js, served assets
-├── seed_demo.py           # Pre-populate demo scenarios
+├── tiles/                 # Offline map tile cache (CartoDB Positron)
+├── data/                  # SQLite database (auto-created)
+├── cache_tiles.py         # Tile download utility for offline map setup
+├── seed_demo.py           # Pre-populate demo scenarios with Gemma analysis
+├── start.sh               # One-command launch script
+├── requirements.txt       # Python dependencies
 └── README.md              # This document
 ```
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/reports` | Submit crisis report → instant triage + streaming AI analysis |
+| `GET` | `/api/reports` | List all reports (ordered by priority) |
+| `GET` | `/api/reports/{id}` | Get single report with AI analysis |
+| `POST` | `/api/briefing` | Generate streaming situation briefing |
+| `POST` | `/api/proximity-analysis` | Run Gemma-powered spatial correlation analysis |
+| `POST` | `/api/resources` | Register tactical resource |
+| `GET` | `/api/dashboard` | System stats and model status |
+| `WS` | `/ws` | Real-time token streaming and event updates |
 
 ## Hackathon Track Alignment
 
@@ -206,19 +231,22 @@ gemma/
 - Disaster response AI for first responders
 - Fully offline edge deployment
 - Real-world crisis coordination utility
+- Spatial intelligence for multi-incident response
 
 **Secondary Track: Safety & Trust**
 - Transparent AI reasoning (token streaming)
 - Structured, deterministic outputs (JSON enforcement)
 - Human-in-the-loop design (operator verifies before acting)
+- Event lifecycle management (ACTIVE → MONITORING → RESOLVED)
 
 ## Why Gemma 4?
 
 Gemma 4 E2B is uniquely suited for this application:
 1. **Small enough for edge** — 3.3 GB quantized fits in laptop RAM alongside the web server
 2. **Smart enough for triage** — Correctly classifies severity, identifies cascading risks, and recommends specific resource deployments
-3. **Apache 2.0 licensed** — Can be deployed in government/military crisis centers without licensing concerns
-4. **Structured output capable** — Reliably generates the JSON schema needed for machine-readable crisis reports
+3. **Smart enough for spatial reasoning** — Analyzes cross-incident correlations and cascade risks between nearby emergencies
+4. **Apache 2.0 licensed** — Can be deployed in government/military crisis centers without licensing concerns
+5. **Structured output capable** — Reliably generates the JSON schema needed for machine-readable crisis reports
 
 ## License
 
