@@ -30,7 +30,7 @@ function switchTab(tab) {
 function initMap() {
   state.map = L.map('map', {
     center: [25.2854, 51.5310], zoom: 13,
-    zoomControl: true, attributionControl: false, maxZoom: 16,
+    zoomControl: true, attributionControl: false, maxZoom: 16, minZoom: 10,
   });
   // Tile layer with CSS class for professional filter treatment
   const tiles = L.tileLayer('/tiles/{z}/{x}/{y}.png', { maxZoom: 16, maxNativeZoom: 16, className: 'map-tiles' });
