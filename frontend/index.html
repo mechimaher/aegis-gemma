@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AEGIS-GEMMA | Air-gapped Edge Intelligence</title>
+  <meta name="description" content="Air-gapped tactical intelligence for crisis coordination — powered by Google Gemma 4, running 100% offline with zero cloud dependencies.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%231a73e8'/><path d='M50 22L73 43V73H27V43Z' fill='white' opacity='.95'/><path d='M50 36L64 49V63H36V49Z' fill='%231a73e8'/></svg>">
+  <link rel="stylesheet" href="/static/lib/leaflet.css">
+  <link rel="stylesheet" href="/static/css/aegis.css">
+</head>
+<body>
+<div id="app">
+
+  <header id="topbar">
+    <div class="topbar-brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      </div>
+      <div>
+        <h1>AEGIS<span class="brand-accent">GEMMA</span></h1>
+        <div class="subtitle">Air-gapped Edge Gemma Intelligence System</div>
+      </div>
+    </div>
+    <div class="topbar-center">
+      <button class="tab-btn active" id="tab-map" onclick="switchTab('map')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/></svg>
+        Tactical Map
+      </button>
+      <button class="tab-btn" id="tab-briefing" onclick="switchTab('briefing')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Situation Briefing
+      </button>
+      <button class="tab-btn" id="tab-demo" onclick="runDemo()" title="Auto-play full demo (Ctrl+Shift+D)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Demo
+      </button>
+    </div>
+    <div class="topbar-status">
+      <div class="status-chip" id="ai-chip">
+        <span class="status-dot" id="ai-status-dot"></span>
+        <span id="ai-status-text">Initializing</span>
+      </div>
+      <div class="status-chip" id="ws-chip">
+        <span class="status-dot" id="ws-status-dot"></span>
+        <span>Live Feed</span>
+      </div>
+      <div class="topbar-time" id="clock">--:--:--</div>
+    </div>
+  </header>
+
+  <aside id="left-panel">
+    <div class="panel-header">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Field Reports
+      </h2>
+      <span class="badge" id="report-count">0</span>
+    </div>
+    <div class="stats-row" id="stats-row">
+      <div class="stat-chip critical">
+        <span class="stat-num" id="stat-critical">0</span>
+        <span class="stat-lbl">Critical</span>
+      </div>
+      <div class="stat-chip">
+        <span class="stat-num" id="stat-total">0</span>
+        <span class="stat-lbl">Total</span>
+      </div>
+      <div class="stat-chip">
+        <span class="stat-num" id="stat-uptime">0s</span>
+        <span class="stat-lbl">Uptime</span>
+      </div>
+    </div>
+    <div class="reports-list" id="reports-list">
+      <div class="empty-state">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.25"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <p>No field reports yet.<br>Drop a pin on the map to file a crisis report.</p>
+      </div>
+    </div>
+  </aside>
+
+  <main id="main-content">
+    <div id="map-view" class="view active">
+      <div id="map"></div>
+      <div id="map-overlay">
+        <div class="map-overlay-msg">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+          Click anywhere on the map to place a crisis pin
+        </div>
+      </div>
+    </div>
+    <div id="briefing-view" class="view">
+      <div class="briefing-container">
+        <div class="briefing-header">
+          <h2>Situation Briefing</h2>
+          <p>Gemma 4 E2B synthesizes all active crisis reports into a unified commander's briefing with prioritized actions and resource recommendations.</p>
+        </div>
+        <button class="btn btn-primary briefing-btn" id="btn-briefing" onclick="generateBriefing()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+          Generate Briefing
+        </button>
+        <div class="briefing-content" id="briefing-content">
+          <div class="briefing-empty">
+            <p>Generate a briefing to get an AI-powered synthesis of all active incidents, resource needs, and cascading risk analysis.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <aside id="right-panel">
+    <div class="panel-header">
+      <h2>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+        Command &amp; Analysis
+      </h2>
+    </div>
+    <div id="report-form-section">
+      <button class="btn btn-pin" id="btn-pin-drop" onclick="togglePinMode()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+        Drop Crisis Pin
+      </button>
+      <form id="report-form" onsubmit="submitReport(event)">
+        <div class="form-group">
+          <label>Coordinates</label>
+          <div class="coord-inputs">
+            <input type="number" step="any" id="input-lat" placeholder="Latitude" required>
+            <input type="number" step="any" id="input-lng" placeholder="Longitude" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Incident Description</label>
+          <div class="textarea-wrap">
+            <textarea id="input-report" placeholder="Describe the crisis situation, injuries, hazards, and resources needed..." required></textarea>
+            <button type="button" class="voice-btn" id="btn-voice" onclick="toggleVoice()" title="Dictate report">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
+                <path d="M19 10v2a7 7 0 01-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-primary" id="btn-submit">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          Submit &amp; Analyze
+        </button>
+      </form>
+    </div>
+    <div id="ai-panel">
+      <div class="empty-state" id="ai-empty">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+        <p>Submit a crisis report to receive<br>AI-powered tactical analysis.<br><br>
+        <em style="color:var(--g-blue)">All processing runs locally on-device.</em></p>
+      </div>
+    </div>
+  </aside>
+
+  <footer id="bottombar">
+    <div class="bottombar-stats">
+      <div class="stat-item"><span>Model:</span><span class="stat-value" id="model-name">Loading...</span></div>
+      <div class="stat-item"><span>Inference:</span><span class="stat-value" id="inference-mode">—</span></div>
+      <div class="stat-item"><span>Network:</span><span class="stat-value" style="color:var(--g-green)">Air-Gapped</span></div>
+    </div>
+    <div class="bottombar-right">
+      <span>Powered by</span>
+      <span class="google-g"><span style="color:#4285F4">G</span><span style="color:#EA4335">o</span><span style="color:#FBBC04">o</span><span style="color:#4285F4">g</span><span style="color:#34A853">l</span><span style="color:#EA4335">e</span></span>
+      <span>Gemma</span>
+      <span class="sep">·</span>
+      <span>100% Open Source</span>
+      <span class="sep">·</span>
+      <span>Zero Cloud Dependencies</span>
+    </div>
+  </footer>
+
+</div>
+
+<div id="toast-container"></div>
+<script src="/static/lib/leaflet.js"></script>
+<script src="/static/js/aegis.js"></script>
+</body>
+</html>

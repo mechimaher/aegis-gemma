@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+venv/
+.venv/
+*.egg
+
+# Data / Runtime
+data/*.db
+*.db
+*.sqlite
+
+# Model weights (too large for git — download separately)
+models/*.gguf
+models/.cache/
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# Logs
+*.log
