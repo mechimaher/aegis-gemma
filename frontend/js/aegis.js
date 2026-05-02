@@ -1010,9 +1010,10 @@ function onProximityComplete(msg) {
       [[p.from_lat, p.from_lng], [p.to_lat, p.to_lng]],
       { color: col, weight: 2.5, dashArray: p.risk_level === 'critical' ? '' : '10 6', opacity: 0.7 }
     ).addTo(state.map);
+    const insight = (p.ai_insight || '').substring(0, 60);
     line.bindTooltip(
-      `<b>#${p.from_id} ↔ #${p.to_id}</b><br>${p.distance_m}m · ${(p.risk_level||'').toUpperCase()}<br><em>${(p.ai_insight||'').substring(0,80)}</em>`,
-      { sticky: true, className: 'prox-tooltip' }
+      `<b>#${p.from_id} ↔ #${p.to_id}</b> · ${p.distance_m}m<br><em>${insight}</em>`,
+      { sticky: true, className: 'prox-tooltip', direction: 'auto' }
     );
     const midLat = (p.from_lat + p.to_lat) / 2;
     const midLng = (p.from_lng + p.to_lng) / 2;
