@@ -366,7 +366,7 @@ function addReportToMap(report) {
   marker.addTo(state.map);
 
   // Enterprise popup
-  marker.bindPopup(buildPopupHTML(report, sev, a), { className: 'crisis-popup', maxWidth: 420, minWidth: 340 });
+  marker.bindPopup(buildPopupHTML(report, sev, a), { className: 'crisis-popup', maxWidth: 360, minWidth: 280 });
 
   state.markers[`r-${report.id}`] = marker;
 
@@ -388,101 +388,72 @@ function addReportToMap(report) {
 
 function buildPopupHTML(report, sev, a) {
   const sevColors = { critical:'#d93025', high:'#e8710a', medium:'#f9ab00', low:'#1e8e3e' };
-  const sevBg = { critical:'rgba(217,48,37,0.08)', high:'rgba(232,113,10,0.08)', medium:'rgba(249,171,0,0.08)', low:'rgba(30,142,62,0.08)' };
-  const sevIcon = { critical:'🔴', high:'🟠', medium:'🟡', low:'🟢' };
+  const sevGrad = {
+    critical:'linear-gradient(135deg, #d93025, #b71c1c)',
+    high:'linear-gradient(135deg, #e8710a, #bf5600)',
+    medium:'linear-gradient(135deg, #f9ab00, #e09100)',
+    low:'linear-gradient(135deg, #1e8e3e, #0d652d)'
+  };
   const col = sevColors[sev] || '#5f6368';
   const p = a.priority || 0;
+  const time = report.created_at ? new Date(report.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
+  const isLive = a.model_used && !a.model_used.includes('fallback');
 
-  // Priority bar segments
+  // Compact priority bar
   let pbar = '';
   for (let i = 1; i <= 10; i++) {
     const filled = i <= p;
-    const color = filled ? (p >= 8 ? '#d93025' : p >= 5 ? '#e8710a' : '#1a73e8') : '#e8eaed';
-    pbar += `<div style="width:16px;height:4px;border-radius:2px;background:${color}"></div>`;
+    const c = filled ? (p >= 8 ? '#fff' : 'rgba(255,255,255,0.9)') : 'rgba(255,255,255,0.25)';
+    pbar += `<div style="width:14px;height:3px;border-radius:2px;background:${c}"></div>`;
   }
 
-  // Resource tags
-  const resTags = (a.resource_needs || []).map(r =>
-    `<span style="display:inline-block;font-size:10px;padding:2px 8px;border-radius:100px;background:rgba(26,115,232,0.1);color:#1a73e8;font-weight:600;margin:2px 3px 2px 0">${r}</span>`
+  // Top 3 resource tags only
+  const topRes = (a.resource_needs || []).slice(0, 3).map(r =>
+    `<span class="pe-chip">${r}</span>`
   ).join('');
-
-  // Risk factors
-  const riskTags = (a.risk_factors || []).map(r =>
-    `<span style="display:inline-block;font-size:10px;padding:2px 8px;border-radius:100px;background:rgba(217,48,37,0.08);color:#d93025;font-weight:600;margin:2px 3px 2px 0">${r}</span>`
-  ).join('');
-
-  const time = report.created_at ? new Date(report.created_at).toLocaleTimeString() : '';
-  const isLive = a.model_used && !a.model_used.includes('fallback');
 
   return `
     <div class="popup-enterprise">
-      <!-- Header band -->
-      <div class="pe-header" style="border-bottom:2px solid ${col}">
-        <div class="pe-header-left">
-          <span class="pe-icon">${sevIcon[sev] || '⚪'}</span>
-          <div>
-            <div class="pe-title">INCIDENT #${String(report.id).padStart(3,'0')}</div>
-            <div class="pe-time">${time}</div>
-          </div>
+      <!-- Color-coded severity band with key identifiers -->
+      <div class="pe-band" style="background:${sevGrad[sev]}">
+        <div class="pe-band-top">
+          <span class="pe-band-id">#${String(report.id).padStart(3,'0')}</span>
+          <span class="pe-band-sev">${sev.toUpperCase()}</span>
         </div>
-        <div class="pe-severity" style="background:${sevBg[sev]};color:${col}">
-          ${sev.toUpperCase()}
+        <div class="pe-band-bar">
+          <div style="display:flex;gap:2px;align-items:center">${pbar}</div>
+          <span class="pe-band-p">P${p}</span>
         </div>
       </div>
 
-      <!-- Priority bar -->
-      <div class="pe-section">
-        <div class="pe-label">THREAT LEVEL</div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <div style="display:flex;gap:2px">${pbar}</div>
-          <span class="pe-priority-num" style="color:${col}">${p}/10</span>
-        </div>
+      <!-- Stats row -->
+      <div class="pe-stats">
+        ${a.category ? `<div class="pe-stat"><span class="pe-stat-val">${a.category}</span><span class="pe-stat-lbl">Type</span></div>` : ''}
+        ${a.affected_estimate > 0 ? `<div class="pe-stat"><span class="pe-stat-val pe-stat-num">${a.affected_estimate.toLocaleString()}</span><span class="pe-stat-lbl">Affected</span></div>` : ''}
+        ${a.evacuation_needed ? `<div class="pe-stat"><span class="pe-stat-val pe-stat-evac">EVAC</span><span class="pe-stat-lbl">Required</span></div>` : ''}
+        <div class="pe-stat"><span class="pe-stat-val">${time}</span><span class="pe-stat-lbl">Time</span></div>
       </div>
 
-      <!-- Incident description -->
-      <div class="pe-section">
-        <div class="pe-label">SITUATION REPORT</div>
-        <div class="pe-body">${(report.report_text || '').substring(0, 180)}${(report.report_text || '').length > 180 ? '...' : ''}</div>
-      </div>
-
-      ${a.summary ? `
-      <div class="pe-section">
-        <div class="pe-label">AI TACTICAL SUMMARY</div>
-        <div class="pe-summary">${a.summary}</div>
-      </div>` : ''}
+      <!-- AI summary (one compact block) -->
+      ${a.summary ? `<div class="pe-intel">
+        <div class="pe-intel-label"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${col}" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg> AI Intel</div>
+        <div class="pe-intel-text">${a.summary}</div>
+      </div>` : `<div class="pe-intel">
+        <div class="pe-intel-text" style="color:var(--on-surface-dim)">${(report.report_text || '').substring(0, 120)}${(report.report_text || '').length > 120 ? '…' : ''}</div>
+      </div>`}
 
       ${a.recommended_action ? `
-      <div class="pe-action-box">
-        <div class="pe-action-icon">⚡</div>
-        <div>
-          <div class="pe-label" style="margin-bottom:2px">IMMEDIATE ACTION</div>
-          <div class="pe-action-text">${a.recommended_action}</div>
-        </div>
+      <div class="pe-cmd">
+        <span class="pe-cmd-icon">⚡</span>
+        <span class="pe-cmd-text">${a.recommended_action}</span>
       </div>` : ''}
 
-      ${a.category || a.evacuation_needed ? `
-      <div class="pe-section pe-row">
-        ${a.category ? `<div><div class="pe-label">TYPE</div><div class="pe-category">${a.category}</div></div>` : ''}
-        ${a.affected_estimate > 0 ? `<div><div class="pe-label">AFFECTED</div><div class="pe-affected">${a.affected_estimate.toLocaleString()}</div></div>` : ''}
-        ${a.evacuation_needed ? `<div><div class="pe-label">EVACUATION</div><div class="pe-evac">REQUIRED</div></div>` : ''}
-      </div>` : ''}
-
-      ${resTags ? `
-      <div class="pe-section">
-        <div class="pe-label">RESOURCES REQUIRED</div>
-        <div class="pe-tags">${resTags}</div>
-      </div>` : ''}
-
-      ${riskTags ? `
-      <div class="pe-section">
-        <div class="pe-label">RISK FACTORS</div>
-        <div class="pe-tags">${riskTags}</div>
-      </div>` : ''}
+      ${topRes ? `<div class="pe-res">${topRes}</div>` : ''}
 
       <!-- Footer -->
       <div class="pe-footer">
-        <span>${report.latitude.toFixed(5)}, ${report.longitude.toFixed(5)}</span>
-        <span>${isLive ? '● Gemma 4 E2B' : '○ Keyword Triage'}${a.inference_time_ms ? ' · ' + a.inference_time_ms + 'ms' : ''}</span>
+        <span>${report.latitude.toFixed(4)}, ${report.longitude.toFixed(4)}</span>
+        <span>${isLive ? '● Gemma 4' : '○ Fallback'}${a.inference_time_ms ? ' · ' + a.inference_time_ms + 'ms' : ''}</span>
       </div>
     </div>`;
 }
