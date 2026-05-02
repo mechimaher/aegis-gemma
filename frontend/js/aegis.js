@@ -31,7 +31,7 @@ function initMap() {
   state.map = L.map('map', {
     center: [25.2854, 51.5310], zoom: 13,
     zoomControl: true, attributionControl: false,
-    maxZoom: 16, minZoom: 11,
+    maxZoom: 16, minZoom: 12,
     maxBounds: [[25.12, 51.32], [25.52, 51.72]],
     maxBoundsViscosity: 1.0,
   });
