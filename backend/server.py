@@ -517,7 +517,47 @@ async def run_proximity_analysis():
                 })
 
     pairs.sort(key=lambda p: p["distance_m"])
-    top_pairs = pairs[:6]  # Limit to 6 closest pairs
+
+    # Deduplicate: skip pairs with near-zero distance (duplicate reports)
+    seen_coords = set()
+    deduped = []
+    for p in pairs:
+        key = (min(p["from_id"], p["to_id"]), max(p["from_id"], p["to_id"]))
+        if p["distance_m"] < 10:
+            # Near-duplicate reports — skip to avoid wasting analysis slots
+            continue
+        if key not in seen_coords:
+            seen_coords.add(key)
+            deduped.append(p)
+    pairs = deduped
+
+    # Coverage-first selection: ensure every incident node has at least
+    # one connection before filling remaining slots with closest pairs.
+    # Standard ICS network topology — no blind spots.
+    MAX_PAIRS = 10
+    covered_ids = set()
+    selected = []
+
+    # Pass 1: guarantee coverage — pick the closest pair for each uncovered incident
+    for p in pairs:
+        if p["from_id"] not in covered_ids or p["to_id"] not in covered_ids:
+            selected.append(p)
+            covered_ids.add(p["from_id"])
+            covered_ids.add(p["to_id"])
+            if len(selected) >= MAX_PAIRS:
+                break
+
+    # Pass 2: fill remaining slots with closest unused pairs
+    if len(selected) < MAX_PAIRS:
+        selected_set = {(p["from_id"], p["to_id"]) for p in selected}
+        for p in pairs:
+            if (p["from_id"], p["to_id"]) not in selected_set:
+                selected.append(p)
+                selected_set.add((p["from_id"], p["to_id"]))
+                if len(selected) >= MAX_PAIRS:
+                    break
+
+    top_pairs = selected
 
     if not top_pairs:
         return {"status": "success", "pairs": [], "message": "No nearby incident pairs found"}
