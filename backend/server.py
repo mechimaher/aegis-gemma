@@ -392,7 +392,7 @@ async def _stream_briefing(prompt: str, report_count: int):
                 start = _time.time()
                 stream = gemma_engine._llm.create_chat_completion(
                     messages=[{"role": "user", "content": prompt}],
-                    max_tokens=384,
+                    max_tokens=300,
                     temperature=0.2,
                     top_p=0.85,
                     repeat_penalty=1.15,
@@ -619,7 +619,7 @@ async def _stream_proximity(prompt: str, pairs: list):
                 start = _time.time()
                 stream = gemma_engine._llm.create_chat_completion(
                     messages=[{"role": "user", "content": prompt}],
-                    max_tokens=512,
+                    max_tokens=384,
                     temperature=0.15,
                     top_p=0.85,
                     repeat_penalty=1.15,

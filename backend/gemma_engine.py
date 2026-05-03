@@ -101,9 +101,9 @@ def load_model(model_path: str = None) -> bool:
         _model_loaded = False
         return False
 
-    # Detect available CPU threads
+    # Use all available CPU threads — benchmarked optimal on i5-10300H (4c/8t)
     cpu_count = os.cpu_count() or 4
-    n_threads = max(4, cpu_count - 2)  # Leave 2 threads for OS/server
+    n_threads = cpu_count
 
     has_cuda = _detect_cuda_backend()
     gpu_layers = 99 if has_cuda else 0
@@ -120,18 +120,18 @@ def load_model(model_path: str = None) -> bool:
     for attempt_layers in gpu_attempts:
         try:
             logger.info(f"Loading model: {os.path.basename(model_path)}")
-            logger.info(f"Attempting GPU layers: {attempt_layers}, Threads: {n_threads}, Context: 2048, Batch: 256")
+            logger.info(f"Attempting GPU layers: {attempt_layers}, Threads: {n_threads}, Context: 512, Batch: 512")
 
             start = time.time()
             _llm = Llama(
                 model_path=model_path,
                 n_gpu_layers=attempt_layers,
-                n_ctx=2048,
+                n_ctx=512,
                 n_threads=n_threads,
-                n_batch=256,
+                n_batch=512,
                 flash_attn=False,
                 use_mmap=True,
-                use_mlock=False,
+                use_mlock=True,
                 verbose=True,
             )
             elapsed = time.time() - start
@@ -197,7 +197,7 @@ def _run_inference_sync(report_text: str, latitude: float,
         start = time.time()
         response = _llm.create_chat_completion(
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=256,
+            max_tokens=200,
             temperature=0.1,
             top_p=0.85,
             repeat_penalty=1.15,
@@ -245,7 +245,7 @@ def _run_inference_streaming(report_text: str, latitude: float,
         start = time.time()
         stream = _llm.create_chat_completion(
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=256,
+            max_tokens=200,
             temperature=0.1,
             top_p=0.85,
             repeat_penalty=1.15,
