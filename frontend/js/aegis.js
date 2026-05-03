@@ -1014,31 +1014,142 @@ function onProximityComplete(msg) {
       ${cardsHtml}
     </div>`;
 
-  // Update map lines with risk colors
+  // Update map lines with defense-grade tactical visualization
   clearProximityLines();
   pairs.forEach(p => {
     const col = riskColors[p.risk_level] || '#5f6368';
+    const riskLevel = (p.risk_level || 'medium').toUpperCase();
+    const distLabel = p.distance_m >= 1000 ? (p.distance_m/1000).toFixed(1)+'km' : p.distance_m+'m';
+    const threatPct = p.risk_level === 'critical' ? 95 : p.risk_level === 'high' ? 72 : p.risk_level === 'medium' ? 45 : 20;
+    const cascadeScore = p.risk_level === 'critical' ? '9.2' : p.risk_level === 'high' ? '7.1' : p.risk_level === 'medium' ? '4.5' : '2.0';
+
+    // Outer glow line (wider, semi-transparent)
+    const glow = L.polyline(
+      [[p.from_lat, p.from_lng], [p.to_lat, p.to_lng]],
+      { color: col, weight: 8, opacity: 0.12, lineCap: 'round', interactive: false }
+    ).addTo(state.map);
+
+    // Main tactical line
     const line = L.polyline(
       [[p.from_lat, p.from_lng], [p.to_lat, p.to_lng]],
-      { color: col, weight: 2.5, dashArray: p.risk_level === 'critical' ? '' : '10 6', opacity: 0.7 }
+      {
+        color: col, weight: 2.5,
+        dashArray: p.risk_level === 'critical' ? '12 4' : '10 8',
+        opacity: 0.85, lineCap: 'round',
+        className: 'proximity-line-active'
+      }
     ).addTo(state.map);
-    const insight = (p.ai_insight || '').substring(0, 60);
-    line.bindTooltip(
-      `<b>#${p.from_id} ↔ #${p.to_id}</b> · ${p.distance_m}m<br><em>${insight}</em>`,
-      { sticky: true, className: 'prox-tooltip', direction: 'auto' }
-    );
+
+    // Build tactical intel popup HTML
+    const popupHtml = `
+      <div class="ptac">
+        <div class="ptac-header" style="background: linear-gradient(135deg, ${col}, ${col}dd);">
+          <div class="ptac-header-top">
+            <div class="ptac-link-badge">
+              <span class="ptac-node">${String(p.from_id).padStart(3,'0')}</span>
+              <span class="ptac-connector"><span class="ptac-connector-line"></span></span>
+              <span class="ptac-node">${String(p.to_id).padStart(3,'0')}</span>
+            </div>
+            <span class="ptac-threat-level">${riskLevel} RISK</span>
+          </div>
+          <div class="ptac-header-meta">
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> ${distLabel}</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> PROXIMITY INTEL</span>
+          </div>
+        </div>
+
+        <div class="ptac-body">
+          <div class="ptac-pair-strip">
+            <div class="ptac-incident" style="border-left: 3px solid ${col}">
+              <div class="ptac-incident-label">ORIGIN</div>
+              <div class="ptac-incident-id" style="color:${col}">INC-${String(p.from_id).padStart(3,'0')}</div>
+              <span class="ptac-incident-cat">${p.from_cat || 'general'}</span>
+            </div>
+            <div class="ptac-vs">
+              <div class="ptac-vs-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2"><path d="M8.12 8.12L15.88 15.88M15.88 8.12L8.12 15.88"/></svg>
+              </div>
+            </div>
+            <div class="ptac-incident" style="border-right: 3px solid ${col}; text-align: right;">
+              <div class="ptac-incident-label">TARGET</div>
+              <div class="ptac-incident-id" style="color:${col}">INC-${String(p.to_id).padStart(3,'0')}</div>
+              <span class="ptac-incident-cat">${p.to_cat || 'general'}</span>
+            </div>
+          </div>
+
+          <div class="ptac-metrics">
+            <div class="ptac-metric">
+              <span class="ptac-metric-val" style="color:${col}">${threatPct}%</span>
+              <span class="ptac-metric-lbl">THREAT</span>
+              <div class="ptac-gauge"><div class="ptac-gauge-fill" style="width:${threatPct}%;background:${col};color:${col}"></div></div>
+            </div>
+            <div class="ptac-metric">
+              <span class="ptac-metric-val" style="color:#f9ab00">${cascadeScore}</span>
+              <span class="ptac-metric-lbl">CASCADE</span>
+              <div class="ptac-gauge"><div class="ptac-gauge-fill" style="width:${parseFloat(cascadeScore)*10}%;background:#f9ab00;color:#f9ab00"></div></div>
+            </div>
+            <div class="ptac-metric">
+              <span class="ptac-metric-val" style="color:#93c5fd">${distLabel}</span>
+              <span class="ptac-metric-lbl">SEPARATION</span>
+              <div class="ptac-gauge"><div class="ptac-gauge-fill" style="width:${Math.max(10,100 - p.distance_m/50)}%;background:#93c5fd;color:#93c5fd"></div></div>
+            </div>
+          </div>
+
+          ${p.ai_insight ? `
+          <div class="ptac-intel">
+            <div class="ptac-intel-header">
+              <div class="ptac-intel-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 0 1 7 7c0 2.38-1.19 4.47-3 5.74V17a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.26C6.19 13.47 5 11.38 5 9a7 7 0 0 1 7-7z"/><line x1="9" y1="21" x2="15" y2="21"/></svg></div>
+              <span class="ptac-intel-label">GEMMA AI ANALYSIS</span>
+            </div>
+            <div class="ptac-intel-text">${p.ai_insight}</div>
+          </div>` : ''}
+
+          ${p.action ? `
+          <div class="ptac-action">
+            <div class="ptac-action-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+            <div>
+              <div class="ptac-action-label">RECOMMENDED ACTION</div>
+              <div class="ptac-action-text">${p.action}</div>
+            </div>
+          </div>` : ''}
+
+          <div class="ptac-footer">
+            <span>AEGIS-GEMMA PROXIMITY INTEL</span>
+            <span class="ptac-footer-gemma">GEMMA 4 E2B</span>
+          </div>
+        </div>
+      </div>`;
+
+    // Bind popup to the line (click to open)
+    line.bindPopup(popupHtml, {
+      className: 'prox-popup',
+      maxWidth: 420,
+      minWidth: 340,
+      closeButton: true,
+      autoPan: true,
+      autoPanPadding: [40, 40],
+    });
+
+    // Distance marker at midpoint
     const midLat = (p.from_lat + p.to_lat) / 2;
     const midLng = (p.from_lng + p.to_lng) / 2;
     const label = L.marker([midLat, midLng], {
       icon: L.divIcon({
         className: 'prox-dist-label',
-        html: `<span style="background:${col}">${p.distance_m >= 1000 ? (p.distance_m/1000).toFixed(1)+'km' : p.distance_m+'m'}</span>`,
-        iconSize: [60, 20], iconAnchor: [30, 10],
+        html: `<span style="background:${col};color:white">${distLabel}</span>`,
+        iconSize: [70, 24], iconAnchor: [35, 12],
       }),
       interactive: false,
     }).addTo(state.map);
-    state.proximityLines.push(line, label);
+
+    state.proximityLines.push(glow, line, label);
   });
+
+  // Auto-open first pair popup for instant impact
+  if (pairs.length > 0) {
+    const firstLine = state.proximityLines.find(l => l.bindPopup && l._popup);
+    if (firstLine) setTimeout(() => firstLine.openPopup(), 600);
+  }
 
   showToast(`Proximity: ${pairs.length} correlations · ${msg.inference_time_ms ? (msg.inference_time_ms/1000).toFixed(1)+'s' : '—'}`, 'success');
 }
@@ -1047,3 +1158,4 @@ function clearProximityLines() {
   state.proximityLines.forEach(l => state.map.removeLayer(l));
   state.proximityLines = [];
 }
+
