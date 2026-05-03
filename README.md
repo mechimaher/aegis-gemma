@@ -28,7 +28,7 @@ Gemma 4 analyzes spatial relationships between nearby incidents using haversine 
 ## How It Works
 
 ```
-Operator → Drops pin on offline map → Describes incident (text or voice)
+Operator → Drops pin on offline map → Describes incident
                                           ↓
                                    Report saved → severity: PENDING
                                           ↓
@@ -65,7 +65,7 @@ Keyword-based triage provides instant classification as a safety net. This ensur
 │  │   Browser    │◄─streaming─► │   FastAPI (async)      │  │
 │  │              │   tokens     │   uvicorn              │  │
 │  │  • Leaflet   │              │   • Non-blocking loop  │  │
-│  │  • Voice API │              │   • ThreadPoolExecutor │  │
+│  │  • Offline   │              │   • ThreadPoolExecutor │  │
 │  │  • Streaming │              │   • WebSocket broadcast│  │
 │  └──────────────┘              └──────────┬─────────────┘  │
 │         │                                 │                │
@@ -117,7 +117,6 @@ The system makes **zero external network calls**:
 - No CDN, no analytics, no telemetry
 - No `fetch()` to any external domain
 
-> **Note on Voice Input:** The Web Speech API is a browser-native feature that works offline on Chromium with OS-level language packs installed. On systems without offline speech packs, Chrome may route audio to Google's servers. For guaranteed air-gap compliance, install the `English (US)` offline speech pack in your OS settings, or disable voice input.
 
 ## Technology Stack
 
@@ -130,7 +129,6 @@ The system makes **zero external network calls**:
 | **Frontend** | Vanilla HTML/CSS/JS (zero frameworks) | No build step, instant deployment |
 | **Maps** | Leaflet.js (locally bundled) + CartoDB Positron tiles | Lightweight, offline-capable |
 | **Streaming** | Native WebSocket | Real-time bidirectional communication |
-| **Voice** | Web Speech API (browser-native) | No external dependency |
 
 ## Quick Start
 
