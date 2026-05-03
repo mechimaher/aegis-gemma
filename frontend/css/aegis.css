@@ -94,9 +94,14 @@ body { font-family: var(--font-sans); background: var(--surface-1); color: var(-
 .severity-badge.high { background: var(--g-orange-light); color: var(--g-orange); }
 .severity-badge.medium { background: var(--g-yellow-light); color: var(--g-yellow); }
 .severity-badge.low { background: var(--g-green-light); color: var(--g-green); }
+.severity-badge.pending, .severity-badge.unknown {
+  background: var(--surface-1); color: var(--on-surface-dim); border: 1px solid var(--outline);
+  display: inline-flex; align-items: center; gap: 4px;
+}
 
 /* ── Analyzing Pulse ─────────────────────── */
 .report-card.analyzing { border-color: var(--g-blue); animation: analyzing-pulse 2s ease-in-out infinite; }
+.report-card.severity-pending, .report-card.severity-unknown { border-left-color: var(--g-blue); animation: analyzing-pulse 2s ease-in-out infinite; }
 @keyframes analyzing-pulse { 0%,100%{background:var(--surface-0)} 50%{background:var(--g-blue-light)} }
 .analyzing-indicator { display: inline-flex; align-items: center; margin-left: 6px; }
 .spinner-sm { width: 12px; height: 12px; border: 2px solid var(--outline); border-top-color: var(--g-blue); border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; }
@@ -149,6 +154,11 @@ body { font-family: var(--font-sans); background: var(--surface-1); color: var(-
 .crisis-marker.high { background: var(--g-orange); color: var(--g-orange); }
 .crisis-marker.medium { background: var(--g-yellow); color: var(--g-yellow); }
 .crisis-marker.low { background: var(--g-green); color: var(--g-green); }
+.crisis-marker.pending, .crisis-marker.unknown {
+  background: var(--g-blue); color: var(--g-blue);
+  animation: pending-pulse 1.5s ease-in-out infinite;
+}
+@keyframes pending-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.85)} }
 
 /* ── Impact Zones ────────────────────────── */
 .impact-zone { transition: opacity .3s; }

@@ -30,14 +30,14 @@ Gemma 4 analyzes spatial relationships between nearby incidents using haversine 
 ```
 Operator → Drops pin on offline map → Describes incident (text or voice)
                                           ↓
-                                   [< 300ms] Instant keyword triage
+                                   Report saved → severity: PENDING
                                           ↓
                               [Background] Gemma 4 E2B inference
                                           ↓
                               [WebSocket] Token-by-token streaming
                                           ↓
-                              Structured JSON analysis delivered:
-                              • Severity classification
+                              Severity REVEALED by Gemma:
+                              • Severity classification (AI-determined)
                               • Priority score (1-10)
                               • Required resources
                               • Evacuation assessment
@@ -45,13 +45,13 @@ Operator → Drops pin on offline map → Describes incident (text or voice)
                               • Recommended immediate action
 ```
 
-### Two-Phase Analysis Pipeline
+### AI-First Analysis Pipeline
 
-**Phase 1 — Instant Triage (< 300ms):**
-The report is persisted to SQLite and classified using keyword analysis. The HTTP response returns immediately. The operator sees the report on the map within milliseconds.
+**When Gemma is online:**
+New reports start as `PENDING` with a neutral pulsing marker on the map. Gemma 4 runs in a `ThreadPoolExecutor` and streams tokens via WebSocket. When analysis completes, severity is **revealed** — the marker changes color, the card updates, and the operator gets an actionable classification. Gemma is the sole authority.
 
-**Phase 2 — Deep AI Analysis (background):**
-Gemma 4 E2B runs in a `ThreadPoolExecutor` to avoid blocking FastAPI's event loop. Each token is streamed via WebSocket to the operator's browser in real-time. The dashboard remains fully responsive during inference — polling, map interaction, and new report submission all continue uninterrupted.
+**When Gemma is offline (fallback):**
+Keyword-based triage provides instant classification as a safety net. This ensures the system degrades gracefully — operators always get some intelligence, even if the model fails to load.
 
 ## Architecture
 
@@ -156,11 +156,11 @@ Open **http://localhost:8080** in any modern browser.
 
 ## Demo Walkthrough
 
-AEGIS-GEMMA includes a one-click automated demo (`▶ Demo` button or `Ctrl+Shift+D`) that showcases all three Gemma features in sequence:
+AEGIS-GEMMA includes a one-click demo (`Demo` button or `Ctrl+Shift+D`) that showcases all three Gemma features in sequence:
 
 1. **Tactical Map** — 3 pre-seeded Doha crisis scenarios appear with severity-colored markers, impact zones, and ACTIVE lifecycle indicators
-2. **Drop a Pin** — Automated pin drop with typewriter-effect incident description
-3. **AI Analysis** — Gemma 4 streams structured JSON analysis token-by-token in real-time
+2. **New Incident** — Pin drop with typewriter-effect incident description
+3. **AI Analysis** — Report starts as PENDING → Gemma 4 streams structured JSON → severity **revealed** in real-time
 4. **Situation Briefing** — Gemma synthesizes ALL reports into a unified commander's overview
 5. **Proximity Intelligence** — Gemma analyzes spatial correlations between nearby incidents
 6. **Map Return** — Risk-colored connector lines with distance labels appear between correlated incidents
@@ -179,7 +179,7 @@ All three incidents are within 5km of each other in the Doha metro area, enablin
 
 | Metric | Value |
 |--------|-------|
-| HTTP response (triage) | < 300ms |
+| HTTP response (report) | < 300ms |
 | Model load time | 2–8s (hardware dependent) |
 | Inference (Report JSON) | 40–80s on CPU |
 | Inference (Briefing text) | 35–95s on CPU |

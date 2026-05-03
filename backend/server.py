@@ -171,27 +171,56 @@ async def submit_crisis_report(req: CrisisReportRequest):
         reporter_id=req.reporter_id,
     )
 
-    # Step 2: Run keyword-based instant triage (sub-millisecond)
-    instant_triage = _fallback_analysis(req.report_text, note="Instant triage — AI analysis pending")
-    instant_report = await update_report_analysis(report["id"], instant_triage)
-
-    # Broadcast instant triage to all clients
-    await manager.broadcast({
-        "type": "new_report",
-        "report": instant_report,
-    })
-
-    # Step 3: Launch STREAMING AI analysis in background (non-blocking)
     if is_model_loaded():
+        # Model available: report stays as "pending" — Gemma is the sole authority
+        # No keyword pre-judgment; the AI reveal is the product moment
+        pending_stub = {
+            "severity": "pending",
+            "priority": 0,
+            "category": "analyzing",
+            "summary": "Gemma 4 analysis in progress...",
+            "recommended_action": "Awaiting AI assessment",
+            "resource_needs": [],
+            "risk_factors": [],
+            "evacuation_needed": False,
+            "inference_time_ms": 0,
+            "model_used": "pending",
+            "tokens_used": 0,
+        }
+        pending_report = await update_report_analysis(report["id"], pending_stub)
+
+        # Broadcast pending report to all clients
+        await manager.broadcast({
+            "type": "new_report",
+            "report": pending_report,
+        })
+
+        # Launch STREAMING AI analysis in background (non-blocking)
         asyncio.create_task(
             _background_streaming_analysis(report["id"], req.report_text, req.latitude, req.longitude)
         )
 
-    return {
-        "status": "success",
-        "report": instant_report,
-        "ai_pending": is_model_loaded(),
-    }
+        return {
+            "status": "success",
+            "report": pending_report,
+            "ai_pending": True,
+        }
+
+    else:
+        # Model unavailable: keyword fallback is the best we can offer
+        instant_triage = _fallback_analysis(req.report_text, note="AI model unavailable — keyword triage only")
+        instant_report = await update_report_analysis(report["id"], instant_triage)
+
+        await manager.broadcast({
+            "type": "new_report",
+            "report": instant_report,
+        })
+
+        return {
+            "status": "success",
+            "report": instant_report,
+            "ai_pending": False,
+        }
 
 
 async def _background_streaming_analysis(report_id: int, report_text: str,

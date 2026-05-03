@@ -356,12 +356,16 @@ function addReportToMap(report) {
   if (state.markers[`r-${report.id}`]) state.map.removeLayer(state.markers[`r-${report.id}`]);
   if (state.markers[`rad-${report.id}`]) state.radiusLayer.removeLayer(state.markers[`rad-${report.id}`]);
 
-  // Severity-based sizing (critical = large, low = small)
-  const sizes = { critical: 28, high: 24, medium: 20, low: 16 };
+  // Pending reports get neutral styling until Gemma decides
+  const isPending = sev === 'pending' || sev === 'unknown';
+
+  // Severity-based sizing (critical = large, pending = medium neutral)
+  const sizes = { critical: 28, high: 24, medium: 20, low: 16, pending: 22, unknown: 22 };
   const sz = sizes[sev] || 18;
+  const markerClass = isPending ? 'crisis-marker pending' : `crisis-marker ${sev}`;
   const icon = L.divIcon({
     className: '',
-    html: `<div class="crisis-marker ${sev}" style="width:${sz}px;height:${sz}px"></div>`,
+    html: `<div class="${markerClass}" style="width:${sz}px;height:${sz}px"></div>`,
     iconSize: [sz, sz],
     iconAnchor: [sz/2, sz/2],
   });
@@ -373,29 +377,33 @@ function addReportToMap(report) {
 
   state.markers[`r-${report.id}`] = marker;
 
-  // Impact radius circle (severity determines radius)
-  const radiusMap = { critical: 400, high: 300, medium: 200, low: 120 };
-  const radius = L.circle([report.latitude, report.longitude], {
-    radius: radiusMap[sev] || 150,
-    color: sevColor(sev),
-    fillColor: sevColor(sev),
-    fillOpacity: 0.06,
-    weight: 1.5,
-    opacity: 0.3,
-    dashArray: sev === 'critical' ? '' : '6 4',
-    className: `impact-zone ${sev}`,
-  });
-  radius.addTo(state.radiusLayer);
-  state.markers[`rad-${report.id}`] = radius;
+  // Impact radius — skip for pending reports (no severity data yet)
+  if (!isPending) {
+    const radiusMap = { critical: 400, high: 300, medium: 200, low: 120 };
+    const radius = L.circle([report.latitude, report.longitude], {
+      radius: radiusMap[sev] || 150,
+      color: sevColor(sev),
+      fillColor: sevColor(sev),
+      fillOpacity: 0.06,
+      weight: 1.5,
+      opacity: 0.3,
+      dashArray: sev === 'critical' ? '' : '6 4',
+      className: `impact-zone ${sev}`,
+    });
+    radius.addTo(state.radiusLayer);
+    state.markers[`rad-${report.id}`] = radius;
+  }
 }
 
 function buildPopupHTML(report, sev, a) {
-  const sevColors = { critical:'#d93025', high:'#e8710a', medium:'#f9ab00', low:'#1e8e3e' };
+  const sevColors = { critical:'#d93025', high:'#e8710a', medium:'#f9ab00', low:'#1e8e3e', pending:'#5f6368', unknown:'#5f6368' };
   const sevGrad = {
     critical:'linear-gradient(135deg, #d93025, #b71c1c)',
     high:'linear-gradient(135deg, #e8710a, #bf5600)',
     medium:'linear-gradient(135deg, #f9ab00, #e09100)',
-    low:'linear-gradient(135deg, #1e8e3e, #0d652d)'
+    low:'linear-gradient(135deg, #1e8e3e, #0d652d)',
+    pending:'linear-gradient(135deg, #5f6368, #3c4043)',
+    unknown:'linear-gradient(135deg, #5f6368, #3c4043)',
   };
   const col = sevColors[sev] || '#5f6368';
   const p = a.priority || 0;
@@ -486,13 +494,18 @@ function getEventStatus(isoDate) {
 function buildCardHTML(report, sev, a) {
   const elapsed = elapsedTime(report.created_at);
   const status = getEventStatus(report.created_at);
+  const isPending = sev === 'pending' || sev === 'unknown';
+  const sevDisplay = isPending
+    ? '<span class="spinner-sm"></span> ANALYZING'
+    : sev;
+  const catDisplay = isPending ? 'Gemma analyzing...' : (a.category || 'pending');
   return `<div class="report-header">
     <span class="report-id">#${String(report.id).padStart(3,'0')}</span>
-    <span class="severity-badge ${sev}">${sev}</span>
+    <span class="severity-badge ${sev}">${sevDisplay}</span>
   </div>
   <div class="report-text">${report.report_text || ''}</div>
   <div class="report-meta">
-    <span>${a.category || 'pending'}</span>
+    <span>${catDisplay}</span>
     <span class="event-status ${status.cls}"><span class="status-pulse"></span>${status.label}</span>
     <span class="elapsed-time" data-created="${report.created_at || ''}">${elapsed}</span>
   </div>`;
@@ -788,7 +801,7 @@ async function runDemo() {
   demoRunning = true;
 
   const scenario = DEMO_SCENARIOS[Math.floor(Math.random() * DEMO_SCENARIOS.length)];
-  showToast(`▶ Demo: ${scenario.label}`, 'info');
+  showToast(`Incoming field report: ${scenario.label}`, 'warning');
   await sleep(1500);
 
   // Step 1: Switch to map tab
@@ -811,7 +824,7 @@ async function runDemo() {
   await sleep(800);
 
   // Step 5: Submit
-  showToast('▶ Submitting report for Gemma 4 analysis...', 'info');
+  showToast('Submitting to Gemma 4 for analysis...', 'info');
   await sleep(500);
   document.getElementById('btn-submit').click();
   await sleep(2000);
@@ -832,7 +845,7 @@ async function runDemo() {
     if (streaming.length === 0 && waited > 5000) break;
   }
 
-  showToast('▶ AI analysis complete. Switching to Situation Briefing...', 'info');
+  showToast('Analysis complete. Generating situation briefing...', 'info');
   await sleep(3000);
 
   // Step 7: Switch to briefing tab
@@ -841,7 +854,7 @@ async function runDemo() {
 
   // Step 8: Generate briefing
   document.getElementById('btn-briefing').click();
-  showToast('▶ Gemma 4 synthesizing all reports...', 'info');
+  showToast('Gemma 4 synthesizing all field reports...', 'info');
 
   // Wait for briefing to complete
   waited = 0;
@@ -852,7 +865,7 @@ async function runDemo() {
   }
 
   await sleep(2000);
-  showToast('▶ Briefing complete. Running Proximity Intelligence...', 'info');
+  showToast('Briefing complete. Running proximity intelligence...', 'info');
   await sleep(2000);
 
   // Step 9: Switch to proximity tab
@@ -861,7 +874,7 @@ async function runDemo() {
 
   // Step 10: Run proximity analysis
   document.getElementById('btn-proximity').click();
-  showToast('▶ Gemma 4 analyzing spatial correlations...', 'info');
+  showToast('Gemma 4 analyzing spatial correlations...', 'info');
 
   // Wait for proximity to complete
   waited = 0;
@@ -872,14 +885,13 @@ async function runDemo() {
   }
 
   await sleep(2000);
-  showToast('▶ Switching to map to view proximity network...', 'info');
+  showToast('Proximity analysis complete. Returning to tactical map...', 'info');
   await sleep(1500);
 
   // Step 11: Switch back to map to show proximity lines
   switchTab('map');
   await sleep(3000);
 
-  showToast('▶ Demo complete. AEGIS-GEMMA ready for deployment.', 'success');
   demoRunning = false;
 }
 
