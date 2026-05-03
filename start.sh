@@ -57,6 +57,22 @@ else
     echo "[OK] Model found: $(ls "$MODEL_DIR"/*.gguf)"
 fi
 
+# Check for GPU/CUDA
+if python3 -c "
+import os
+try:
+    import llama_cpp
+    lib_dir = os.path.join(os.path.dirname(llama_cpp.__file__), 'lib')
+    has_cuda = any('cuda' in f.lower() for f in os.listdir(lib_dir))
+    print('CUDA' if has_cuda else 'CPU')
+except:
+    print('CPU')
+" 2>/dev/null | grep -q "CUDA"; then
+    echo "[OK] CUDA backend detected — GPU acceleration enabled"
+else
+    echo "[OK] CPU-only mode (install nvidia-cuda-toolkit + rebuild for GPU)"
+fi
+
 # Check for cached tiles
 TILE_COUNT=$(find "$SCRIPT_DIR/tiles" -name "*.png" 2>/dev/null | wc -l)
 if [ "$TILE_COUNT" -eq 0 ]; then

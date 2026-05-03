@@ -3,7 +3,7 @@ Aegis-Gemma: Local Gemma Inference Engine
 Wraps llama-cpp-python for air-gapped, zero-trust LLM inference.
 Produces structured crisis-response JSON from unstructured field reports.
 
-Tuned for CPU inference: flash attention, streaming, thread-safe.
+Auto-detects CUDA for GPU offloading, falls back to CPU. Thread-safe, streaming.
 """
 
 import json
@@ -18,9 +18,39 @@ from typing import Optional, AsyncGenerator, Callable
 
 logger = logging.getLogger("aegis.gemma")
 
+# ─── Auto-configure CUDA runtime library paths ──────────
+# If nvidia-cuda-runtime-cu12 / nvidia-cublas-cu12 are pip-installed,
+# add their lib dirs to LD_LIBRARY_PATH so llama-cpp can find them.
+def _setup_cuda_library_paths():
+    lib_dirs = []
+    for pkg in ["nvidia.cuda_runtime", "nvidia.cublas", "nvidia.cuda_nvrtc"]:
+        try:
+            mod = __import__(pkg, fromlist=[""])
+            lib_dir = os.path.join(mod.__path__[0], "lib")
+            if os.path.isdir(lib_dir):
+                lib_dirs.append(lib_dir)
+        except ImportError:
+            pass
+    if lib_dirs:
+        existing = os.environ.get("LD_LIBRARY_PATH", "")
+        new_paths = ":".join(lib_dirs)
+        os.environ["LD_LIBRARY_PATH"] = f"{new_paths}:{existing}" if existing else new_paths
+        import ctypes
+        for d in lib_dirs:
+            for f in os.listdir(d):
+                if f.endswith(".so") or ".so." in f:
+                    try:
+                        ctypes.CDLL(os.path.join(d, f), mode=ctypes.RTLD_GLOBAL)
+                    except OSError:
+                        pass
+        logger.info(f"CUDA runtime paths injected: {lib_dirs}")
+
+_setup_cuda_library_paths()
+
 # ─── Global State ────────────────────────────────────────
 _llm = None
 _model_loaded = False
+_gpu_layers_offloaded = 0
 _inference_lock = threading.Lock()  # Serialize model access
 _thread_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="gemma")
 
@@ -36,12 +66,26 @@ def get_model_path() -> str:
     return os.path.join(models_dir, "gemma-4-e2b-it.gguf")
 
 
+def _detect_cuda_backend() -> bool:
+    """Check if llama-cpp-python was compiled with CUDA support."""
+    try:
+        import llama_cpp
+        lib_dir = os.path.join(os.path.dirname(llama_cpp.__file__), "lib")
+        if os.path.isdir(lib_dir):
+            for f in os.listdir(lib_dir):
+                if "cuda" in f.lower() or "cublas" in f.lower():
+                    return True
+        return False
+    except Exception:
+        return False
+
+
 def load_model(model_path: str = None) -> bool:
     """
     Load the Gemma GGUF model into memory.
-    Tuned for maximum CPU inference throughput.
+    Attempts GPU offloading first, falls back to CPU-only if unavailable.
     """
-    global _llm, _model_loaded
+    global _llm, _model_loaded, _gpu_layers_offloaded
 
     if _model_loaded and _llm is not None:
         logger.info("Model already loaded, skipping.")
@@ -61,51 +105,53 @@ def load_model(model_path: str = None) -> bool:
     cpu_count = os.cpu_count() or 4
     n_threads = max(4, cpu_count - 2)  # Leave 2 threads for OS/server
 
-    try:
-        from llama_cpp import Llama
+    has_cuda = _detect_cuda_backend()
+    gpu_layers = 99 if has_cuda else 0
+    if has_cuda:
+        logger.info("CUDA backend detected — requesting GPU layer offloading")
+    else:
+        logger.warning("No CUDA backend in llama-cpp-python — running CPU-only")
 
-        logger.info(f"Loading model: {os.path.basename(model_path)}")
-        logger.info(f"Threads: {n_threads}, Context: 1024, Batch: 256")
+    # Progressive GPU layer attempts: try full offload, then reduce if VRAM is tight
+    gpu_attempts = [99, 24, 16, 10, 0] if has_cuda else [0]
 
-        start = time.time()
-        _llm = Llama(
-            model_path=model_path,
-            n_gpu_layers=99,
-            n_ctx=2048,
-            n_threads=n_threads,
-            n_batch=256,
-            flash_attn=True,
-            use_mmap=True,
-            use_mlock=False,
-            verbose=True,
-        )
-        elapsed = time.time() - start
-        logger.info(f"Model loaded in {elapsed:.1f}s")
-        _model_loaded = True
-        return True
+    from llama_cpp import Llama
 
-    except Exception as e:
-        logger.error(f"Failed to load model: {e}")
-        # Attempt CPU-only fallback without flash attention
+    for attempt_layers in gpu_attempts:
         try:
-            from llama_cpp import Llama
-            logger.info("Attempting CPU-only fallback...")
+            logger.info(f"Loading model: {os.path.basename(model_path)}")
+            logger.info(f"Attempting GPU layers: {attempt_layers}, Threads: {n_threads}, Context: 2048, Batch: 256")
+
+            start = time.time()
             _llm = Llama(
                 model_path=model_path,
-                n_gpu_layers=0,
+                n_gpu_layers=attempt_layers,
                 n_ctx=2048,
                 n_threads=n_threads,
                 n_batch=256,
+                flash_attn=False,
                 use_mmap=True,
+                use_mlock=False,
                 verbose=True,
             )
-            logger.info("Model loaded (CPU-only mode)")
+            elapsed = time.time() - start
+            _gpu_layers_offloaded = attempt_layers
+            if attempt_layers > 0:
+                mode = f"GPU ({attempt_layers} layers) + CPU"
+            else:
+                mode = "CPU-only"
+            logger.info(f"Model loaded in {elapsed:.1f}s ({mode})")
             _model_loaded = True
             return True
-        except Exception as e2:
-            logger.error(f"CPU fallback also failed: {e2}")
-            _model_loaded = False
-            return False
+
+        except Exception as e:
+            logger.warning(f"Failed with {attempt_layers} GPU layers: {e}")
+            _llm = None
+            continue
+
+    logger.error("All load attempts failed")
+    _model_loaded = False
+    return False
 
 
 def is_model_loaded() -> bool:
@@ -392,9 +438,15 @@ def _fallback_analysis(report_text: str, note: str = "Model not loaded") -> dict
 
 def get_model_status() -> dict:
     """Return current model status for the dashboard."""
+    if _model_loaded:
+        mode = "gpu-accelerated" if _gpu_layers_offloaded > 0 else "cpu-only"
+    else:
+        mode = "offline"
     return {
         "loaded": _model_loaded,
         "model_path": get_model_path() if _model_loaded else None,
         "engine": "llama.cpp (llama-cpp-python)",
-        "mode": "hybrid-gpu-cpu" if _model_loaded else "offline",
+        "mode": mode,
+        "gpu_layers": _gpu_layers_offloaded,
+        "cuda_available": _detect_cuda_backend(),
     }
