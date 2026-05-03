@@ -120,13 +120,13 @@ def load_model(model_path: str = None) -> bool:
     for attempt_layers in gpu_attempts:
         try:
             logger.info(f"Loading model: {os.path.basename(model_path)}")
-            logger.info(f"Attempting GPU layers: {attempt_layers}, Threads: {n_threads}, Context: 512, Batch: 512")
+            logger.info(f"Attempting GPU layers: {attempt_layers}, Threads: {n_threads}, Context: 1024, Batch: 512")
 
             start = time.time()
             _llm = Llama(
                 model_path=model_path,
                 n_gpu_layers=attempt_layers,
-                n_ctx=512,
+                n_ctx=1024,
                 n_threads=n_threads,
                 n_batch=512,
                 flash_attn=False,
@@ -197,7 +197,7 @@ def _run_inference_sync(report_text: str, latitude: float,
         start = time.time()
         response = _llm.create_chat_completion(
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=200,
+            max_tokens=256,
             temperature=0.1,
             top_p=0.85,
             repeat_penalty=1.15,
@@ -245,7 +245,7 @@ def _run_inference_streaming(report_text: str, latitude: float,
         start = time.time()
         stream = _llm.create_chat_completion(
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=200,
+            max_tokens=256,
             temperature=0.1,
             top_p=0.85,
             repeat_penalty=1.15,
