@@ -1023,75 +1023,69 @@ function onProximityComplete(msg) {
     const threatPct = p.risk_level === 'critical' ? 95 : p.risk_level === 'high' ? 72 : p.risk_level === 'medium' ? 45 : 20;
     const cascadeScore = p.risk_level === 'critical' ? '9.2' : p.risk_level === 'high' ? '7.1' : p.risk_level === 'medium' ? '4.5' : '2.0';
 
-    // Outer glow line (wider, semi-transparent)
-    const glow = L.polyline(
-      [[p.from_lat, p.from_lng], [p.to_lat, p.to_lng]],
-      { color: col, weight: 8, opacity: 0.12, lineCap: 'round', interactive: false }
-    ).addTo(state.map);
-
-    // Main tactical line
+    // Dashed connection line
     const line = L.polyline(
       [[p.from_lat, p.from_lng], [p.to_lat, p.to_lng]],
       {
-        color: col, weight: 2.5,
-        dashArray: p.risk_level === 'critical' ? '12 4' : '10 8',
-        opacity: 0.85, lineCap: 'round',
+        color: col, weight: 2,
+        dashArray: p.risk_level === 'critical' ? '8 4' : '6 6',
+        opacity: 0.7, lineCap: 'round',
         className: 'proximity-line-active'
       }
     ).addTo(state.map);
 
-    // Build tactical intel popup HTML
+    // Build popup HTML
     const popupHtml = `
       <div class="ptac">
-        <div class="ptac-header" style="background: linear-gradient(135deg, ${col}, ${col}dd);">
+        <div class="ptac-header" style="background: ${col};">
           <div class="ptac-header-top">
             <div class="ptac-link-badge">
               <span class="ptac-node">${String(p.from_id).padStart(3,'0')}</span>
               <span class="ptac-connector"><span class="ptac-connector-line"></span></span>
               <span class="ptac-node">${String(p.to_id).padStart(3,'0')}</span>
             </div>
-            <span class="ptac-threat-level">${riskLevel} RISK</span>
+            <span class="ptac-threat-level">${riskLevel}</span>
           </div>
           <div class="ptac-header-meta">
             <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> ${distLabel}</span>
-            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> PROXIMITY INTEL</span>
+            <span>Proximity Intel</span>
           </div>
         </div>
 
         <div class="ptac-body">
           <div class="ptac-pair-strip">
-            <div class="ptac-incident" style="border-left: 3px solid ${col}">
+            <div class="ptac-incident">
               <div class="ptac-incident-label">ORIGIN</div>
-              <div class="ptac-incident-id" style="color:${col}">INC-${String(p.from_id).padStart(3,'0')}</div>
+              <div class="ptac-incident-id">INC-${String(p.from_id).padStart(3,'0')}</div>
               <span class="ptac-incident-cat">${p.from_cat || 'general'}</span>
             </div>
             <div class="ptac-vs">
               <div class="ptac-vs-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2"><path d="M8.12 8.12L15.88 15.88M15.88 8.12L8.12 15.88"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="${col}" stroke-width="2" opacity="0.4"><path d="M8.12 8.12L15.88 15.88M15.88 8.12L8.12 15.88"/></svg>
               </div>
             </div>
-            <div class="ptac-incident" style="border-right: 3px solid ${col}; text-align: right;">
+            <div class="ptac-incident" style="text-align: right;">
               <div class="ptac-incident-label">TARGET</div>
-              <div class="ptac-incident-id" style="color:${col}">INC-${String(p.to_id).padStart(3,'0')}</div>
+              <div class="ptac-incident-id">INC-${String(p.to_id).padStart(3,'0')}</div>
               <span class="ptac-incident-cat">${p.to_cat || 'general'}</span>
             </div>
           </div>
 
           <div class="ptac-metrics">
             <div class="ptac-metric">
-              <span class="ptac-metric-val" style="color:${col}">${threatPct}%</span>
+              <span class="ptac-metric-val">${threatPct}%</span>
               <span class="ptac-metric-lbl">THREAT</span>
-              <div class="ptac-gauge"><div class="ptac-gauge-fill" style="width:${threatPct}%;background:${col};color:${col}"></div></div>
+              <div class="ptac-gauge"><div class="ptac-gauge-fill" style="width:${threatPct}%;background:${col}"></div></div>
             </div>
             <div class="ptac-metric">
-              <span class="ptac-metric-val" style="color:#f9ab00">${cascadeScore}</span>
+              <span class="ptac-metric-val">${cascadeScore}</span>
               <span class="ptac-metric-lbl">CASCADE</span>
-              <div class="ptac-gauge"><div class="ptac-gauge-fill" style="width:${parseFloat(cascadeScore)*10}%;background:#f9ab00;color:#f9ab00"></div></div>
+              <div class="ptac-gauge"><div class="ptac-gauge-fill" style="width:${parseFloat(cascadeScore)*10}%;background:var(--g-yellow)"></div></div>
             </div>
             <div class="ptac-metric">
-              <span class="ptac-metric-val" style="color:#93c5fd">${distLabel}</span>
+              <span class="ptac-metric-val">${distLabel}</span>
               <span class="ptac-metric-lbl">SEPARATION</span>
-              <div class="ptac-gauge"><div class="ptac-gauge-fill" style="width:${Math.max(10,100 - p.distance_m/50)}%;background:#93c5fd;color:#93c5fd"></div></div>
+              <div class="ptac-gauge"><div class="ptac-gauge-fill" style="width:${Math.max(10,100 - p.distance_m/50)}%;background:var(--g-blue)"></div></div>
             </div>
           </div>
 
