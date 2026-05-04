@@ -145,7 +145,8 @@ body { font-family: var(--font-sans); background: var(--surface-1); color: var(-
 .map-overlay-msg { background: var(--surface-0); border: 1px solid var(--g-blue); padding: 8px 20px; border-radius: var(--radius-full); font-size: 13px; font-weight: 500; color: var(--g-blue); box-shadow: var(--elevation-2); display: flex; align-items: center; gap: 8px; }
 
 /* ── Crisis Markers (severity-scaled) ──── */
-.crisis-marker { border-radius: 50%; border: 2.5px solid rgba(255,255,255,.9); box-shadow: 0 2px 8px rgba(0,0,0,.5); position: relative; transition: transform .2s; }
+.crisis-marker { border-radius: 50%; border: 2.5px solid rgba(255,255,255,.9); box-shadow: 0 2px 8px rgba(0,0,0,.5); position: relative; transition: transform .2s; display: flex; align-items: center; justify-content: center; }
+.marker-id { font-family: var(--font-mono); font-size: 9px; font-weight: 800; color: white; text-shadow: 0 1px 2px rgba(0,0,0,.5); line-height: 1; pointer-events: none; user-select: none; }
 .crisis-marker:hover { transform: scale(1.2); }
 .crisis-marker::after { content: ''; position: absolute; inset: -5px; border-radius: 50%; border: 1.5px solid currentColor; opacity: .2; animation: marker-ring 3s ease-in-out infinite; }
 @keyframes marker-ring { 0%,100%{transform:scale(1);opacity:.2} 50%{transform:scale(1.4);opacity:0} }

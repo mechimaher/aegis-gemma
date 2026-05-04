@@ -277,13 +277,14 @@ function addReportToMap(report) {
   // Pending reports get neutral styling until Gemma decides
   const isPending = sev === 'pending' || sev === 'unknown';
 
-  // Severity-based sizing (critical = large, pending = medium neutral)
-  const sizes = { critical: 28, high: 24, medium: 20, low: 16, pending: 22, unknown: 22 };
-  const sz = sizes[sev] || 18;
+  // Severity-based sizing (all large enough for ID label)
+  const sizes = { critical: 30, high: 26, medium: 24, low: 22, pending: 26, unknown: 26 };
+  const sz = sizes[sev] || 24;
   const markerClass = isPending ? 'crisis-marker pending' : `crisis-marker ${sev}`;
+  const idLabel = report.id || '';
   const icon = L.divIcon({
     className: '',
-    html: `<div class="${markerClass}" style="width:${sz}px;height:${sz}px"></div>`,
+    html: `<div class="${markerClass}" style="width:${sz}px;height:${sz}px"><span class="marker-id">${idLabel}</span></div>`,
     iconSize: [sz, sz],
     iconAnchor: [sz/2, sz/2],
   });
