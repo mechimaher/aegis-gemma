@@ -28,8 +28,8 @@ DEMO_SCENARIOS = [
     },
     {
         "latitude": 25.3100,
-        "longitude": 51.4900,
-        "report_text": "Mass casualty incident at sports stadium. Crowd crush during evacuation. Approximately 50 people injured, 12 in critical condition. Medical facilities overwhelmed. Need additional ambulances and field hospitals.",
+        "longitude": 51.4400,
+        "report_text": "Mass casualty incident at Education City sports stadium. Crowd crush during evacuation. Approximately 50 people injured, 12 in critical condition. Medical facilities overwhelmed. Need additional ambulances and field hospitals.",
     },
 ]
 

@@ -124,7 +124,9 @@ def load_model(model_path: str = None) -> bool:
     for attempt_layers in gpu_attempts:
         try:
             logger.info(f"Loading model: {os.path.basename(model_path)}")
-            logger.info(f"Attempting GPU layers: {attempt_layers}, Threads: {n_threads}, Context: 1024, Batch: 512, FlashAttn: ON, KV-Q8")
+            # CPU-only mode: disable use_mlock to prevent SIGABRT on some systems
+            mlock = attempt_layers > 0
+            logger.info(f"Attempting GPU layers: {attempt_layers}, Threads: {n_threads}, Context: 1024, Batch: 512, FlashAttn: ON, mlock: {mlock}")
 
             start = time.time()
             _llm = Llama(
@@ -138,7 +140,7 @@ def load_model(model_path: str = None) -> bool:
                 type_k=1,
                 type_v=1,
                 use_mmap=True,
-                use_mlock=True,
+                use_mlock=mlock,
                 no_perf=True,
                 verbose=False,
             )
@@ -152,7 +154,7 @@ def load_model(model_path: str = None) -> bool:
             _model_loaded = True
             return True
 
-        except Exception as e:
+        except (Exception, SystemError, OSError) as e:
             logger.warning(f"Failed with {attempt_layers} GPU layers: {e}")
             _llm = None
             continue

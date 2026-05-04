@@ -696,21 +696,67 @@ function showToast(msg, type='info') {
 
 // ─── DEMO AUTO-PLAY ─────────────────────────────────
 // Triggered by Ctrl+Shift+D or the floating demo button
+// 12 geographically distinct scenarios covering entire Doha metro area
 const DEMO_SCENARIOS = [
   {
-    lat: 25.2850, lng: 51.5150,
-    text: "Chemical plant explosion in industrial zone. Massive fire with toxic black smoke spreading southeast. 15 workers critically injured, 3 unaccounted for. Residential area 500 meters downwind — immediate evacuation needed. Secondary explosion risk from adjacent fuel storage tanks.",
+    lat: 25.3200, lng: 51.5280,
+    text: "Chemical plant explosion in Al Corniche industrial zone. Massive fire with toxic black smoke spreading southeast. 15 workers critically injured, 3 unaccounted for. Residential area 500 meters downwind — immediate evacuation needed. Secondary explosion risk from adjacent fuel storage tanks.",
     label: "Chemical Plant Explosion"
   },
   {
-    lat: 25.2700, lng: 51.5380,
-    text: "Major earthquake struck residential district. Two 8-story apartment buildings have partially collapsed. Estimated 150 residents trapped under debris. Gas mains ruptured, strong smell of gas. Multiple fires breaking out. Aftershock activity continuing.",
-    label: "Earthquake — Residential Collapse"
+    lat: 25.3650, lng: 51.4900,
+    text: "Major earthquake struck West Bay residential towers. Two 8-story apartment buildings have partially collapsed. Estimated 150 residents trapped under debris. Gas mains ruptured, strong smell of gas. Multiple fires breaking out. Aftershock activity continuing.",
+    label: "Earthquake — West Bay"
   },
   {
-    lat: 25.3050, lng: 51.5500,
-    text: "Flash flooding on coastal highway after storm surge. 60+ vehicles submerged. Bus with 35 passengers stranded in rising water. Water level at 2 meters and climbing. Power lines down in flood zone creating electrocution hazard.",
-    label: "Flash Flood — Highway"
+    lat: 25.2550, lng: 51.5580,
+    text: "Flash flooding on Industrial Area highway after storm surge. 60+ vehicles submerged. Bus with 35 passengers stranded in rising water. Water level at 2 meters and climbing. Power lines down in flood zone creating electrocution hazard.",
+    label: "Flash Flood — Industrial Area"
+  },
+  {
+    lat: 25.3800, lng: 51.5100,
+    text: "Gas pipeline rupture near Lusail Stadium. High-pressure natural gas leak creating 200-meter exclusion zone. 8 construction workers with severe burns, 2 in critical condition. Risk of ignition from nearby electrical infrastructure. Wind carrying fumes toward residential blocks.",
+    label: "Gas Pipeline Rupture — Lusail"
+  },
+  {
+    lat: 25.3550, lng: 51.5520,
+    text: "Multi-vehicle collision on The Pearl-Qatar causeway. Tanker truck carrying hazardous materials overturned. Fuel spill spreading across 4 lanes. 22 vehicles involved, multiple casualties. Bridge structural integrity compromised. Maritime traffic also affected.",
+    label: "HAZMAT Collision — The Pearl"
+  },
+  {
+    lat: 25.3100, lng: 51.4400,
+    text: "Building collapse at Education City campus during peak hours. Library structure failed — steel framework buckled under load. Estimated 80 students and staff trapped. Rescue teams on site but heavy equipment needed. Adjacent lecture halls being evacuated as precaution.",
+    label: "Collapse — Education City"
+  },
+  {
+    lat: 25.1700, lng: 51.6000,
+    text: "Massive warehouse fire at Al Wakrah logistics hub. Three adjacent storage units fully engulfed. Ammunition and pyrotechnics stored in warehouse 3 — intermittent explosions. 6 firefighters injured. Smoke plume visible from 20 kilometers. Nearby highway closed.",
+    label: "Warehouse Fire — Al Wakrah"
+  },
+  {
+    lat: 25.2300, lng: 51.4800,
+    text: "Crowd crush at major sports venue during championship match. Emergency exits blocked. Approximately 200 people injured, 30 in critical condition. Medical teams overwhelmed — requesting 15 additional ambulances and 3 field hospitals. Stadium PA system failed.",
+    label: "Crowd Crush — Sports Complex"
+  },
+  {
+    lat: 25.4100, lng: 51.4500,
+    text: "Toxic chemical spill at northern water treatment facility. Chlorine gas leak affecting 2-kilometer radius. 500 residents in immediate danger zone. Schools and hospitals within perimeter being evacuated. Wind direction shifting — contamination zone expanding south.",
+    label: "Chemical Spill — Water Treatment"
+  },
+  {
+    lat: 25.2850, lng: 51.5700,
+    text: "Construction crane collapse at high-rise development site in Lusail City. Crane fell across 3 occupied floors of adjacent residential tower. Estimated 40 people trapped. Structural engineers report risk of further collapse. Power and water lines severed to surrounding blocks.",
+    label: "Crane Collapse — Lusail City"
+  },
+  {
+    lat: 25.3400, lng: 51.4200,
+    text: "Severe sandstorm causing zero visibility on Dukhan Highway. 15-vehicle pileup confirmed. Airport operations suspended. Power grid failures across western suburbs. Emergency shelters activated for 300 stranded motorists. Communication towers damaged — intermittent outages.",
+    label: "Sandstorm — Dukhan Highway"
+  },
+  {
+    lat: 25.2100, lng: 51.5400,
+    text: "Ferry capsized in Doha Bay near Old Airport area. 85 passengers aboard, 30 confirmed in water. Coast guard and naval assets deployed. Strong currents hampering rescue operations. Water temperature cold — hypothermia risk for survivors. Nearby vessels redirected to assist.",
+    label: "Ferry Capsized — Doha Bay"
   }
 ];
 
@@ -735,12 +781,12 @@ async function runDemo() {
   if (demoRunning) { showToast('Demo already running.', 'warning'); return; }
   demoRunning = true;
 
-  // Cycle through scenarios sequentially (never repeat until all 3 used)
+  // Cycle through 12 scenarios sequentially (never repeat until all used)
   const scenario = { ...DEMO_SCENARIOS[demoScenarioIndex % DEMO_SCENARIOS.length] };
   demoScenarioIndex++;
-  // Add small coordinate jitter (~50-100m) to prevent exact overlaps on repeat cycles
-  scenario.lat += (Math.random() - 0.5) * 0.002;
-  scenario.lng += (Math.random() - 0.5) * 0.002;
+  // Add coordinate jitter (~300-500m) to prevent exact overlaps on repeat cycles
+  scenario.lat += (Math.random() - 0.5) * 0.008;
+  scenario.lng += (Math.random() - 0.5) * 0.008;
   showToast(`Incoming field report: ${scenario.label}`, 'warning');
   await sleep(1500);
 

@@ -205,15 +205,26 @@ AEGISGEMMA includes a one-click demo (`Demo` button or `Ctrl+Shift+D`) that show
 5. **Proximity Intel** — Gemma analyzes spatial correlations between nearby incidents
 6. **Map Return** — Risk connector lines with draggable intel cards
 
-### Pre-Seeded Scenarios
+### Scenario Pool (12 Distinct Crisis Types)
 
-| # | Scenario | Category |
-|---|----------|----------|
-| 1 | Building collapse — 25 trapped, stress fractures | Infrastructure |
-| 2 | Industrial chemical fire — toxic smoke plume | Fire / Hazmat |
-| 3 | Stadium crowd crush — 50 injured, mass casualty | Medical |
+The demo cycles through **12 geographically distinct scenarios** spread across the entire Doha metro area — each run places a new incident at a unique location with coordinate jitter to prevent marker overlap on repeat cycles:
 
-All incidents are within 5 km (Doha metro area), enabling proximity analysis to identify cascade risks and resource-sharing opportunities.
+| # | Scenario | Location | Category |
+|---|----------|----------|----------|
+| 1 | Chemical plant explosion | Al Corniche | Fire / Hazmat |
+| 2 | Earthquake — residential towers | West Bay | Infrastructure |
+| 3 | Flash flooding — highway | Industrial Area | Flood |
+| 4 | Gas pipeline rupture | Lusail Stadium | Hazmat |
+| 5 | HAZMAT tanker collision | The Pearl-Qatar | Fire / Hazmat |
+| 6 | Building collapse — campus | Education City | Infrastructure |
+| 7 | Warehouse fire — logistics hub | Al Wakrah | Fire |
+| 8 | Crowd crush — sports venue | Sports Complex | Medical |
+| 9 | Toxic chemical spill | Water Treatment (North) | Hazmat |
+| 10 | Construction crane collapse | Lusail City | Infrastructure |
+| 11 | Sandstorm — zero visibility | Dukhan Highway | Weather |
+| 12 | Ferry capsized | Doha Bay | Maritime |
+
+All incidents are distributed across the Doha metro area, enabling proximity analysis to identify cascade risks and resource-sharing opportunities between geographically distinct crisis zones.
 
 ---
 
