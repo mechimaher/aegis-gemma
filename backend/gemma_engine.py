@@ -105,16 +105,16 @@ def load_model(model_path: str = None) -> bool:
         _model_loaded = False
         return False
 
-    # Use all available CPU threads — benchmarked optimal on i5-10300H (4c/8t)
-    cpu_count = os.cpu_count() or 4
-    n_threads = cpu_count
-
     has_cuda = _detect_cuda_backend()
     gpu_layers = 99 if has_cuda else 0
     if has_cuda:
         logger.info("CUDA backend detected — requesting GPU layer offloading")
     else:
         logger.warning("No CUDA backend in llama-cpp-python — running CPU-only")
+
+    # For GPU-primary inference, fewer CPU threads avoids memory bus contention
+    cpu_count = os.cpu_count() or 4
+    n_threads = max(2, cpu_count // 2) if has_cuda else cpu_count
 
     # Progressive GPU layer attempts: try full offload, then reduce if VRAM is tight
     gpu_attempts = [99, 24, 16, 10, 0] if has_cuda else [0]
@@ -124,7 +124,7 @@ def load_model(model_path: str = None) -> bool:
     for attempt_layers in gpu_attempts:
         try:
             logger.info(f"Loading model: {os.path.basename(model_path)}")
-            logger.info(f"Attempting GPU layers: {attempt_layers}, Threads: {n_threads}, Context: 1024, Batch: 512")
+            logger.info(f"Attempting GPU layers: {attempt_layers}, Threads: {n_threads}, Context: 1024, Batch: 512, FlashAttn: ON, KV-Q8")
 
             start = time.time()
             _llm = Llama(
@@ -133,10 +133,14 @@ def load_model(model_path: str = None) -> bool:
                 n_ctx=1024,
                 n_threads=n_threads,
                 n_batch=512,
-                flash_attn=False,
+                flash_attn=True,
+                offload_kqv=True,
+                type_k=1,
+                type_v=1,
                 use_mmap=True,
                 use_mlock=True,
-                verbose=True,
+                no_perf=True,
+                verbose=False,
             )
             elapsed = time.time() - start
             _gpu_layers_offloaded = attempt_layers
@@ -214,10 +218,11 @@ def _run_inference_sync(report_text: str, latitude: float,
         start = time.time()
         response = _llm.create_chat_completion(
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=256,
+            max_tokens=200,
             temperature=0.1,
             top_p=0.85,
-            repeat_penalty=1.15,
+            top_k=40,
+            repeat_penalty=1.1,
         )
         elapsed = time.time() - start
 
@@ -262,10 +267,11 @@ def _run_inference_streaming(report_text: str, latitude: float,
         start = time.time()
         stream = _llm.create_chat_completion(
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=256,
+            max_tokens=200,
             temperature=0.1,
             top_p=0.85,
-            repeat_penalty=1.15,
+            top_k=40,
+            repeat_penalty=1.1,
             stream=True,
         )
         for chunk in stream:
