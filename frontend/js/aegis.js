@@ -14,7 +14,7 @@ const state = {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-  initMap(); initClock(); initWebSocket(); initVoice();
+  initMap(); initClock(); initWebSocket();
   loadReports(); loadDashboard();
   setInterval(loadDashboard, 15000);
   setInterval(refreshElapsedTimes, 30000);
@@ -128,92 +128,9 @@ function placePin(lat, lng) {
   showToast('Pin placed. Describe the incident below.', 'info');
 }
 
-// ─── Voice Input (graceful degradation for air-gapped environments) ─
-function initVoice() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) {
-    // Browser doesn't support Speech API at all
-    document.getElementById('btn-voice').title = 'Voice input unavailable in this browser';
-    document.getElementById('btn-voice').style.opacity = '0.3';
-    document.getElementById('btn-voice').style.cursor = 'not-allowed';
-    state.voiceUnavailable = true;
-    return;
-  }
-  state.recognition = new SR();
-  state.recognition.continuous = true;
-  state.recognition.interimResults = true;
-  state.recognition.lang = 'en-US';
-  state.voiceGotResult = false;
-
-  state.recognition.onresult = (e) => {
-    state.voiceGotResult = true;
-    if (state.voiceTimeout) { clearTimeout(state.voiceTimeout); state.voiceTimeout = null; }
-    let text = '';
-    for (let i = 0; i < e.results.length; i++) text += e.results[i][0].transcript;
-    document.getElementById('input-report').value = text;
-  };
-
-  state.recognition.onerror = (e) => {
-    if (e.error === 'network') {
-      // Cloud transcription failed — air-gapped environment
-      showToast('Voice requires internet or OS offline speech packs. Type your report instead.', 'warning');
-    } else if (e.error === 'not-allowed') {
-      showToast('Microphone access denied. Check browser permissions.', 'warning');
-    } else if (e.error !== 'aborted') {
-      showToast('Voice input error: ' + e.error, 'warning');
-    }
-    stopVoice();
-  };
-
-  state.recognition.onend = () => { if (state.isListening) stopVoice(); };
-}
-
-function toggleVoice() {
-  if (state.voiceUnavailable) {
-    showToast('Voice input not supported in this browser.', 'warning');
-    return;
-  }
-  if (state.isListening) stopVoice(); else startVoice();
-}
-
-function startVoice() {
-  if (!state.recognition) {
-    showToast('Voice input not available.', 'warning');
-    return;
-  }
-  state.isListening = true;
-  state.voiceGotResult = false;
-  try {
-    state.recognition.start();
-  } catch (e) {
-    showToast('Voice input failed to start.', 'warning');
-    state.isListening = false;
-    return;
-  }
-  const btn = document.getElementById('btn-voice');
-  btn.classList.add('active');
-  showToast('Listening. Describe the incident...', 'info');
-
-  // Safety timeout: if no result within 4 seconds, warn user
-  state.voiceTimeout = setTimeout(() => {
-    if (state.isListening && !state.voiceGotResult) {
-      showToast('No speech detected. Ensure microphone is connected, or type your report.', 'warning');
-      stopVoice();
-    }
-  }, 4000);
-}
-
-function stopVoice() {
-  state.isListening = false;
-  if (state.voiceTimeout) { clearTimeout(state.voiceTimeout); state.voiceTimeout = null; }
-  if (state.recognition) try { state.recognition.stop(); } catch(e) {}
-  document.getElementById('btn-voice').classList.remove('active');
-}
-
 // ─── Submit Report ──────────────────────────────────
 async function submitReport(e) {
   e.preventDefault();
-  if (state.isListening) stopVoice();
   const lat = parseFloat(document.getElementById('input-lat').value);
   const lng = parseFloat(document.getElementById('input-lng').value);
   const text = document.getElementById('input-report').value.trim();
