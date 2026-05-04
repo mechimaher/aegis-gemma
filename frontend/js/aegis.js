@@ -918,7 +918,7 @@ function onProximityComplete(msg) {
           <span class="prox-type">${p.to_cat||'—'}</span>
         </div>
         ${p.ai_insight ? `<div class="prox-insight">${p.ai_insight}</div>` : ''}
-        ${p.action ? `<div class="prox-action"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#00897b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> ${p.action}</div>` : ''}
+        ${p.action ? `<div class="prox-action"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#5f6368" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> ${p.action}</div>` : ''}
       </div>`;
   }).join('');
 
@@ -954,7 +954,7 @@ function onProximityComplete(msg) {
     // Build popup HTML
     const popupHtml = `
       <div class="ptac">
-        <div class="ptac-header" style="background: ${col};">
+        <div class="ptac-header" style="background: #3c4043;">
           <div class="ptac-header-top">
             <div class="ptac-link-badge">
               <span class="ptac-node">${String(p.from_id).padStart(3,'0')}</span>
@@ -992,12 +992,12 @@ function onProximityComplete(msg) {
             <div class="ptac-metric">
               <span class="ptac-metric-val">${threatPct}%</span>
               <span class="ptac-metric-lbl">THREAT</span>
-              <div class="ptac-gauge"><div class="ptac-gauge-fill" style="width:${threatPct}%;background:${col}"></div></div>
+              <div class="ptac-gauge"><div class="ptac-gauge-fill" style="width:${threatPct}%;background:var(--g-blue)"></div></div>
             </div>
             <div class="ptac-metric">
               <span class="ptac-metric-val">${cascadeScore}</span>
               <span class="ptac-metric-lbl">CASCADE</span>
-              <div class="ptac-gauge"><div class="ptac-gauge-fill" style="width:${parseFloat(cascadeScore)*10}%;background:var(--g-yellow)"></div></div>
+              <div class="ptac-gauge"><div class="ptac-gauge-fill" style="width:${parseFloat(cascadeScore)*10}%;background:var(--g-blue)"></div></div>
             </div>
             <div class="ptac-metric">
               <span class="ptac-metric-val">${distLabel}</span>
