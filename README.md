@@ -1,8 +1,10 @@
-# AEGISGEMMA
+# 🛡️ AEGISGEMMA
 
 ### Air-Gapped Edge Gemma Intelligence System
 
-> First-responder tactical AI that runs **100% offline** — powered by Google Gemma 4 E2B with GPU-accelerated inference via llama.cpp. Zero cloud. Zero latency. Zero excuses.
+**Gemma 4 Hackathon · Global Resilience Track**
+
+> First-responder tactical AI that runs **100% offline** — powered by Google Gemma 4 E2B with GPU-accelerated inference. Zero cloud. Zero latency. Zero excuses.
 
 ---
 
@@ -234,16 +236,17 @@ AEGISGEMMA ships with a seed script (`seed_demo.py`) that pre-populates the data
 ```
 aegis-gemma/
 ├── backend/
+│   ├── __init__.py        # Package init
 │   ├── server.py          # FastAPI, WebSocket, API routes, proximity engine
 │   ├── gemma_engine.py    # Gemma inference, streaming, JSON parsing
 │   └── database.py        # SQLite schema, async CRUD
 ├── frontend/
 │   ├── index.html         # Single-page application
-│   ├── css/aegis.css      # Design system
+│   ├── css/aegis.css      # Design system (Google Material palette)
 │   └── js/aegis.js        # Map, streaming, briefing, proximity UI
-├── models/                # Gemma 4 GGUF model (not tracked in git)
-├── tiles/                 # Offline map tile cache
-├── data/                  # SQLite database (auto-created)
+├── models/                # Gemma 4 GGUF model (google_gemma-4-E2B-it-Q4_K_M.gguf)
+├── tiles/                 # Offline map tile cache (CartoDB Positron)
+├── data/                  # SQLite database (auto-created at runtime)
 ├── seed_demo.py           # Demo scenario seeder
 ├── cache_tiles.py         # Tile download utility
 ├── start.sh               # Launch script
@@ -296,3 +299,7 @@ Gemma 4 E2B is uniquely suited for edge crisis response:
 ## License
 
 Apache 2.0
+
+---
+
+*Built for the [Google Gemma 4 Hackathon](https://ai.google.dev/gemma) — demonstrating that the most critical AI runs where there is no cloud.*

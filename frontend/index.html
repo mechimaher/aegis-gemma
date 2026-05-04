@@ -154,11 +154,15 @@
         </button>
       </form>
     </div>
+    <div id="ai-panel-divider">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+      AI Analysis Feed
+    </div>
     <div id="ai-panel">
       <div class="empty-state" id="ai-empty">
         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
         <p>Submit a crisis report to receive<br>AI-powered tactical analysis.<br><br>
-        <em style="color:var(--g-blue)">All processing runs locally on-device.</em></p>
+        <em class="brand-accent">All processing runs locally on-device.</em></p>
       </div>
     </div>
   </aside>
@@ -167,7 +171,7 @@
     <div class="bottombar-stats">
       <div class="stat-item"><span>Model:</span><span class="stat-value" id="model-name">Loading...</span></div>
       <div class="stat-item"><span>Inference:</span><span class="stat-value" id="inference-mode">—</span></div>
-      <div class="stat-item"><span>Connectivity:</span><span class="stat-value" style="color:var(--g-green)">Offline</span></div>
+      <div class="stat-item"><span>Connectivity:</span><span class="stat-value">Air-Gapped</span></div>
     </div>
     <div class="bottombar-right">
       <span>Powered by Google Gemma</span>

@@ -11,7 +11,7 @@ const state = {
   proximityLines: [],
   proximityLinesByPair: [],
   proximityBuffer: '',
-  activePairPopup: null,
+  activePairPopups: new Map(),
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -244,7 +244,7 @@ function updateReportWithAnalysis(reportId, report) {
     const analysis = report.ai_analysis || {};
     const time = report.created_at ? new Date(report.created_at).toLocaleTimeString() : '';
     card.innerHTML = buildCardHTML(report, severity, analysis);
-    card.onclick = () => { flyToReport(report); };
+    card.onclick = () => { flyToReport(report); showAiAnalysis(report); };
   }
   addReportToMap(report);
   const idx = state.reports.findIndex(r => r.id === reportId);
@@ -295,7 +295,7 @@ function addReportToMap(report) {
   marker.addTo(state.map);
 
   // Enterprise popup
-  marker.bindPopup(buildPopupHTML(report, sev, a), { className: 'crisis-popup', maxWidth: 360, minWidth: 280 });
+  marker.bindPopup(buildPopupHTML(report, sev, a), { className: 'crisis-popup', maxWidth: 360, minWidth: 280, autoClose: false, closeOnClick: false });
 
   state.markers[`r-${report.id}`] = marker;
 
@@ -318,16 +318,14 @@ function addReportToMap(report) {
 }
 
 function buildPopupHTML(report, sev, a) {
-  const sevColors = { critical:'#d93025', high:'#e8710a', medium:'#f9ab00', low:'#1e8e3e', pending:'#5f6368', unknown:'#5f6368' };
   const sevGrad = {
     critical:'linear-gradient(135deg, #d93025, #b71c1c)',
-    high:'linear-gradient(135deg, #3c4043, #202124)',
-    medium:'linear-gradient(135deg, #3c4043, #202124)',
-    low:'linear-gradient(135deg, #3c4043, #202124)',
+    high:'linear-gradient(135deg, #e8710a, #c25e00)',
+    medium:'linear-gradient(135deg, #f9ab00, #e09500)',
+    low:'linear-gradient(135deg, #1e8e3e, #137333)',
     pending:'linear-gradient(135deg, #5f6368, #3c4043)',
     unknown:'linear-gradient(135deg, #5f6368, #3c4043)',
   };
-  const col = sevColors[sev] || '#5f6368';
   const p = a.priority || 0;
   const time = report.created_at ? new Date(report.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
   const isLive = a.model_used && !a.model_used.includes('fallback');
@@ -340,48 +338,41 @@ function buildPopupHTML(report, sev, a) {
     pbar += `<div style="width:14px;height:3px;border-radius:2px;background:${c}"></div>`;
   }
 
-  // Top 3 resource tags only
-  const topRes = (a.resource_needs || []).slice(0, 3).map(r =>
-    `<span class="pe-chip">${r}</span>`
-  ).join('');
+  // Format category for display
+  const formatTag = t => t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const catDisplay = a.category ? formatTag(a.category) : '';
+
+  // Truncated summary for popup (full version lives in right panel)
+  const summaryText = a.summary
+    ? (a.summary.length > 150 ? a.summary.substring(0, 150) + '…' : a.summary)
+    : (report.report_text || '').substring(0, 120) + ((report.report_text || '').length > 120 ? '…' : '');
 
   return `
     <div class="popup-enterprise">
-      <!-- Color-coded severity band with key identifiers -->
+      <!-- Severity band -->
       <div class="pe-band" style="background:${sevGrad[sev]}">
         <div class="pe-band-top">
           <span class="pe-band-id">#${String(report.id).padStart(3,'0')}</span>
           <span class="pe-band-sev">${sev.toUpperCase()}</span>
         </div>
+        ${catDisplay ? `<div class="pe-band-cat">${catDisplay}</div>` : ''}
         <div class="pe-band-bar">
           <div style="display:flex;gap:2px;align-items:center">${pbar}</div>
           <span class="pe-band-p">P${p}</span>
         </div>
       </div>
 
-      <!-- Stats row -->
+      <!-- Key stats -->
       <div class="pe-stats">
-        ${a.category ? `<div class="pe-stat"><span class="pe-stat-val">${a.category}</span><span class="pe-stat-lbl">Type</span></div>` : ''}
         ${a.affected_estimate > 0 ? `<div class="pe-stat"><span class="pe-stat-val pe-stat-num">${a.affected_estimate.toLocaleString()}</span><span class="pe-stat-lbl">Affected</span></div>` : ''}
         ${a.evacuation_needed ? `<div class="pe-stat"><span class="pe-stat-val pe-stat-evac">EVAC</span><span class="pe-stat-lbl">Required</span></div>` : ''}
         <div class="pe-stat"><span class="pe-stat-val">${time}</span><span class="pe-stat-lbl">Time</span></div>
       </div>
 
-      <!-- AI summary (one compact block) -->
-      ${a.summary ? `<div class="pe-intel">
-        <div class="pe-intel-label"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--g-blue)" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg> AI Intel</div>
-        <div class="pe-intel-text">${a.summary}</div>
-      </div>` : `<div class="pe-intel">
-        <div class="pe-intel-text" style="color:var(--on-surface-dim)">${(report.report_text || '').substring(0, 120)}${(report.report_text || '').length > 120 ? '…' : ''}</div>
-      </div>`}
-
-      ${a.recommended_action ? `
-      <div class="pe-cmd">
-        <span class="pe-cmd-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5f6368" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
-        <span class="pe-cmd-text">${a.recommended_action}</span>
-      </div>` : ''}
-
-      ${topRes ? `<div class="pe-res">${topRes}</div>` : ''}
+      <!-- Summary only -->
+      <div class="pe-intel">
+        <div class="pe-intel-text">${summaryText}</div>
+      </div>
 
       <!-- Footer -->
       <div class="pe-footer">
@@ -420,7 +411,8 @@ function buildCardHTML(report, sev, a) {
   const sevDisplay = isPending
     ? '<span class="spinner-sm"></span> ANALYZING'
     : sev;
-  const catDisplay = isPending ? 'Gemma analyzing...' : (a.category || 'pending');
+  const formatTag = t => t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const catDisplay = isPending ? 'Gemma analyzing...' : formatTag(a.category || 'pending');
   return `<div class="report-header">
     <span class="report-id">#${String(report.id).padStart(3,'0')}</span>
     <span class="severity-badge ${sev}">${sevDisplay}</span>
@@ -464,36 +456,98 @@ function showAiAnalysis(report) {
   const a = report.ai_analysis || {};
   const empty = document.getElementById('ai-empty'); if (empty) empty.remove();
   const p = a.priority || 0;
-  let pbar = ''; for (let i=1;i<=10;i++) { let c='priority-segment'; if(i<=p){c+=' filled';if(p>=8)c+=' critical';else if(p>=5)c+=' high';} pbar+=`<div class="${c}"></div>`; }
-  const res = (a.resource_needs||[]).map(r=>`<span class="ai-tag">${r}</span>`).join('');
-  const risks = (a.risk_factors||[]).map(r=>`<span class="ai-tag risk">${r}</span>`).join('');
+  const sevGradMap = {
+    critical:'linear-gradient(135deg, #d93025, #b71c1c)',
+    high:'linear-gradient(135deg, #e8710a, #c25e00)',
+    medium:'linear-gradient(135deg, #f9ab00, #e09500)',
+    low:'linear-gradient(135deg, #1e8e3e, #137333)',
+    pending:'linear-gradient(135deg, #5f6368, #3c4043)',
+    unknown:'linear-gradient(135deg, #5f6368, #3c4043)',
+  };
+  const sev = a.severity || 'unknown';
+  const sevBg = sevGradMap[sev] || sevGradMap.unknown;
+
+  // Priority bar with severity-aware colors
+  let pbar = ''; for (let i=1;i<=10;i++) {
+    const filled = i <= p;
+    const c = filled ? (p >= 8 ? '#fff' : 'rgba(255,255,255,0.9)') : 'rgba(255,255,255,0.25)';
+    pbar += `<div style="width:14px;height:3px;border-radius:2px;background:${c}"></div>`;
+  }
+  const formatTag = t => t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const catDisplay = a.category ? formatTag(a.category) : '';
+  const res = (a.resource_needs||[]).map(r=>`<span class="ai-tag">${formatTag(r)}</span>`).join('');
+  const risks = (a.risk_factors||[]).map(r=>`<span class="ai-tag risk">${formatTag(r)}</span>`).join('');
   const isLive = a.model_used && a.model_used.includes('gemma');
-  const lbl = isLive ? 'GEMMA 4 E2B ANALYSIS' : 'AEGIS TRIAGE';
-  const cls = isLive ? 'ai-result ai-live' : 'ai-result';
-  const html = `<div class="${cls}" data-report-id="${report.id}">
-    <div class="ai-result-header">
-      <div class="ai-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#4285f4" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg></div>
-      <span>${lbl} — Report #${report.id}</span>
+
+  const html = `<div class="ai-result" data-report-id="${report.id}">
+    <!-- Severity Header Band -->
+    <div class="ai-band" style="background:${sevBg}">
+      <div class="ai-band-top">
+        <span class="ai-band-id">#${String(report.id).padStart(3,'0')}</span>
+        <span class="ai-band-model">${isLive ? '● GEMMA 4' : '○ FALLBACK'}</span>
+      </div>
+      ${catDisplay ? `<div class="ai-band-cat">${catDisplay}</div>` : ''}
+      <div class="ai-band-bar">
+        <span class="ai-band-sev">${sev.toUpperCase()}</span>
+        <div style="display:flex;gap:2px;align-items:center">${pbar}</div>
+        <span class="ai-band-p">P${p}</span>
+      </div>
     </div>
-    <div class="ai-field"><div class="ai-field-label">Severity / Priority</div>
-      <div style="display:flex;align-items:center;gap:12px">
-        <span class="severity-badge ${a.severity||'low'}">${a.severity||'unknown'}</span>
-        <div class="priority-bar">${pbar}</div>
-        <span style="font-family:var(--font-mono);font-size:12px;color:var(--on-surface-variant)">${p}/10</span>
-      </div></div>
-    <div class="ai-field"><div class="ai-field-label">Tactical Summary</div><div class="ai-field-value">${a.summary||'Analysis pending...'}</div></div>
-    <div class="ai-field"><div class="ai-field-label">Immediate Action</div><div class="ai-field-value">${a.recommended_action||'—'}</div></div>
-    <div class="ai-field"><div class="ai-field-label">Incident Type</div><div class="ai-field-value">${a.category||'general'} ${a.evacuation_needed?'<span style="color:var(--g-red);font-weight:700"> — EVACUATION REQUIRED</span>':''}</div></div>
-    ${a.affected_estimate>0?`<div class="ai-field"><div class="ai-field-label">Estimated Affected</div><div class="ai-field-value" style="font-family:var(--font-mono);font-size:18px;font-weight:700">${a.affected_estimate}</div></div>`:''}
-    ${res?`<div class="ai-field"><div class="ai-field-label">Required Resources</div><div class="ai-tags">${res}</div></div>`:''}
-    ${risks?`<div class="ai-field"><div class="ai-field-label">Risk Factors</div><div class="ai-tags">${risks}</div></div>`:''}
+
+    ${a.evacuation_needed ? `<div class="ai-evac-alert">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      EVACUATION REQUIRED
+    </div>` : ''}
+
+    <!-- Tactical Summary -->
+    <div class="ai-section">
+      <div class="ai-section-label"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--g-blue)" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg> Tactical Summary</div>
+      <div class="ai-section-text">${a.summary||'Analysis pending...'}</div>
+    </div>
+
+    <!-- Immediate Action -->
+    ${a.recommended_action ? `<div class="ai-section ai-section-action">
+      <div class="ai-section-label"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--g-orange)" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Immediate Action</div>
+      <div class="ai-section-text">${a.recommended_action}</div>
+    </div>` : ''}
+
+    <!-- Metrics Row -->
+    ${a.affected_estimate > 0 ? `<div class="ai-metrics">
+      <div class="ai-metric">
+        <span class="ai-metric-val">${a.affected_estimate.toLocaleString()}</span>
+        <span class="ai-metric-lbl">Est. Affected</span>
+      </div>
+    </div>` : ''}
+
+    <!-- Resources & Risks -->
+    ${res ? `<div class="ai-section">
+      <div class="ai-section-label"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--g-blue)" stroke-width="2"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg> Required Resources</div>
+      <div class="ai-tags">${res}</div>
+    </div>` : ''}
+    ${risks ? `<div class="ai-section">
+      <div class="ai-section-label"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--g-red)" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Risk Factors</div>
+      <div class="ai-tags">${risks}</div>
+    </div>` : ''}
+
+    <!-- Inference Footer -->
     <div class="inference-meta">
       <span>${a.inference_time_ms?a.inference_time_ms+'ms':'—'}</span>
-      <span>${isLive ? 'gemma-4-e2b-it-local' : ''}</span>
+      <span>${isLive ? 'gemma-4-e2b-it' : ''}</span>
       <span>${a.tokens_used?a.tokens_used+' tokens':''}</span>
-    </div></div>`;
+    </div>
+  </div>`;
+  // Clear all previous completed cards (keep streaming ones intact)
+  panel.querySelectorAll('.ai-result:not(.ai-streaming)').forEach(el => {
+    if (el.getAttribute('data-report-id') !== String(report.id)) el.remove();
+  });
   const ex = panel.querySelector(`[data-report-id="${report.id}"]`);
   if (ex) ex.outerHTML = html; else panel.insertAdjacentHTML('afterbegin', html);
+  panel.scrollTop = 0;
+
+  // Highlight active card in left panel
+  document.querySelectorAll('.report-card').forEach(c => c.classList.remove('active'));
+  const activeCard = document.getElementById(`report-card-${report.id}`);
+  if (activeCard) activeCard.classList.add('active');
 }
 
 // ─── Situation Briefing (STREAMING) ─────────────────
@@ -528,8 +582,7 @@ async function generateBriefing() {
     const res = await fetch('/api/briefing', { method: 'POST' });
     const data = await res.json();
     if (data.status === 'success') {
-      content.innerHTML = `<div class="briefing-text">${(data.briefing || '').replace(/\n/g,'<br>')}</div>`;
-      btn.disabled = false; btn.innerHTML = briefingBtnDefault;
+      onBriefingComplete(data);
       clearTimeout(state._briefingTimeout);
     } else if (data.status === 'busy') {
       content.innerHTML = `<div class="briefing-empty"><p>${data.message}</p></div>`;
@@ -556,16 +609,167 @@ function onBriefingToken(token) {
   if (countEl) countEl.textContent = `${state.briefingBuffer.split(/\s+/).length} tokens`;
 }
 
+function parseBriefingSections(text) {
+  const lines = text.split('\n');
+  const sections = [];
+  let current = { title: '', body: '' };
+  // Monochrome SVG icons — single stroke color, Google enterprise style
+  const svgI = (d) => `<svg class="brpt-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">${d}</svg>`;
+  const sectionIcons = {
+    'overview':  svgI('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'),
+    'summary':   svgI('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'),
+    'situation':  svgI('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'),
+    'executive': svgI('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'),
+    'critical':  svgI('<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>'),
+    'immediate': svgI('<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>'),
+    'urgent':    svgI('<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>'),
+    'action':    svgI('<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>'),
+    'priority':  svgI('<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>'),
+    'resource':  svgI('<path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>'),
+    'deploy':    svgI('<path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>'),
+    'personnel': svgI('<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>'),
+    'logistics': svgI('<path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/>'),
+    'equipment': svgI('<path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>'),
+    'risk':      svgI('<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>'),
+    'cascade':   svgI('<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>'),
+    'threat':    svgI('<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>'),
+    'hazard':    svgI('<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>'),
+    'warning':   svgI('<path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>'),
+    'evacuation':svgI('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>'),
+    'shelter':   svgI('<path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>'),
+    'safety':    svgI('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'),
+    'coordination': svgI('<path d="M8.12 8.12L15.88 15.88M15.88 8.12L8.12 15.88"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/>'),
+    'communication': svgI('<path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>'),
+    'inter-agency': svgI('<path d="M8.12 8.12L15.88 15.88"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/>'),
+    'recommendation': svgI('<path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>'),
+    'next':      svgI('<path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>'),
+    'follow':    svgI('<path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>'),
+    'outlook':   svgI('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>'),
+    'forecast':  svgI('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>'),
+    'medical':   svgI('<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>'),
+    'health':    svgI('<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>'),
+    'hospital':  svgI('<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>'),
+    'casualt':   svgI('<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>'),
+    'infrastructure': svgI('<rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>'),
+    'damage':    svgI('<rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>'),
+    'structural':svgI('<rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/>'),
+    'transport': svgI('<rect x="1" y="3" width="15" height="13" rx="2" ry="2"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>'),
+  };
+  const defaultIcon = svgI('<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>');
+  function matchIcon(title) {
+    const t = title.toLowerCase();
+    for (const [key, icon] of Object.entries(sectionIcons)) {
+      if (t.includes(key)) return icon;
+    }
+    return defaultIcon;
+  }
+  for (const line of lines) {
+    const headerMatch = line.match(/^\*\*(.+?)\*\*\s*:?\s*$/) || line.match(/^\*\*(.+?)\*\*/) ||
+      line.match(/^#{1,3}\s+(.+)$/) || line.match(/^([A-Z][A-Z\s&/,-]{4,}):?\s*$/);
+    if (headerMatch) {
+      if (current.title || current.body.trim()) sections.push({ ...current });
+      current = { title: headerMatch[1].replace(/\*\*/g, '').trim(), body: '' };
+    } else {
+      current.body += line + '\n';
+    }
+  }
+  if (current.title || current.body.trim()) sections.push({ ...current });
+  return sections.map(s => ({ ...s, icon: matchIcon(s.title || s.body) }));
+}
+
 function onBriefingComplete(data) {
   const content = document.getElementById('briefing-content');
   const btn = document.getElementById('btn-briefing');
   if (state._briefingTimeout) clearTimeout(state._briefingTimeout);
   const text = data.briefing || state.briefingBuffer || '';
-  const meta = `<div class="briefing-meta">${data.inference_time_ms || 0}ms · ${data.tokens_used || 0} tokens · ${data.report_count || 0} reports analyzed · gemma-4-e2b-it-local</div>`;
-  content.innerHTML = `<div class="briefing-text">${text.replace(/\n/g,'<br>')}</div>${meta}`;
+  const now = new Date();
+  const ts = now.toISOString().replace('T', ' ').split('.')[0] + ' UTC';
+  const reportCount = data.report_count || state.reports.length || 0;
+  const critCount = state.reports.filter(r => (r.severity || r.ai_analysis?.severity) === 'critical').length;
+  const highCount = state.reports.filter(r => (r.severity || r.ai_analysis?.severity) === 'high').length;
+  const infMs = data.inference_time_ms || 0;
+  const tokens = data.tokens_used || 0;
+  const tps = infMs > 0 ? (tokens / (infMs / 1000)).toFixed(1) : '—';
+
+  // Parse sections
+  const sections = parseBriefingSections(text);
+  const hasSections = sections.some(s => s.title);
+
+  let bodyHtml;
+  if (hasSections) {
+    bodyHtml = sections.map((s, i) => {
+      if (!s.title && !s.body.trim()) return '';
+      const bodyText = s.body.trim().replace(/\n/g, '<br>').replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\*(.+?)\*/g, '<em>$1</em>');
+      if (!s.title) return `<div class="brpt-section brpt-section-intro" style="animation-delay:${i*80}ms"><div class="brpt-section-body">${bodyText}</div></div>`;
+      return `<div class="brpt-section" style="animation-delay:${i*80}ms">
+        <div class="brpt-section-header"><span class="brpt-section-icon">${s.icon}</span><span class="brpt-section-title">${s.title}</span></div>
+        <div class="brpt-section-body">${bodyText}</div>
+      </div>`;
+    }).join('');
+  } else {
+    bodyHtml = `<div class="brpt-section brpt-section-intro"><div class="brpt-section-body">${text.replace(/\n/g, '<br>').replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')}</div></div>`;
+  }
+
+  const threatLevel = critCount >= 2 ? 'CRITICAL' : critCount >= 1 ? 'ELEVATED' : highCount >= 2 ? 'HIGH' : 'MODERATE';
+
+  content.innerHTML = `
+    <div class="brpt">
+      <div class="brpt-classified">
+        <div class="brpt-classified-left">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span>AEGISGEMMA SITUATION BRIEFING</span>
+        </div>
+        <span class="brpt-classified-ts">${ts}</span>
+      </div>
+
+      <div class="brpt-threat-banner">
+        <div class="brpt-threat-left">
+          <span class="brpt-threat-label">THREAT ASSESSMENT</span>
+          <span class="brpt-threat-level">${threatLevel}</span>
+        </div>
+        <div class="brpt-threat-right">
+          <span class="brpt-threat-pill"><span class="brpt-dot"></span> GEMMA 4 E2B — LOCAL INFERENCE</span>
+        </div>
+      </div>
+
+      <div class="brpt-metrics">
+        <div class="brpt-metric">
+          <span class="brpt-metric-val">${reportCount}</span>
+          <span class="brpt-metric-lbl">REPORTS ANALYZED</span>
+        </div>
+        <div class="brpt-metric">
+          <span class="brpt-metric-val">${critCount}</span>
+          <span class="brpt-metric-lbl">CRITICAL</span>
+        </div>
+        <div class="brpt-metric">
+          <span class="brpt-metric-val">${highCount}</span>
+          <span class="brpt-metric-lbl">HIGH SEVERITY</span>
+        </div>
+        <div class="brpt-metric">
+          <span class="brpt-metric-val">${(infMs/1000).toFixed(1)}s</span>
+          <span class="brpt-metric-lbl">INFERENCE TIME</span>
+        </div>
+        <div class="brpt-metric">
+          <span class="brpt-metric-val">${tokens}</span>
+          <span class="brpt-metric-lbl">TOKENS</span>
+        </div>
+        <div class="brpt-metric">
+          <span class="brpt-metric-val">${tps}</span>
+          <span class="brpt-metric-lbl">TOKENS/SEC</span>
+        </div>
+      </div>
+
+      <div class="brpt-body">${bodyHtml}</div>
+
+      <div class="brpt-footer">
+        <span>AEGISGEMMA · Air-Gapped Edge Intelligence</span>
+        <span>gemma-4-e2b-it · ${tokens} tokens · ${(infMs/1000).toFixed(1)}s · ${reportCount} reports</span>
+      </div>
+    </div>`;
+
   btn.disabled = false;
   btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg> Generate Briefing';
-  showToast(`Briefing complete — ${data.tokens_used || 0} tokens in ${((data.inference_time_ms || 0)/1000).toFixed(1)}s`, 'success');
+  showToast(`Briefing complete — ${tokens} tokens in ${(infMs/1000).toFixed(1)}s · ${tps} tok/s`, 'success');
 }
 
 // ─── Load Data ──────────────────────────────────────
@@ -749,7 +953,7 @@ function onProximityStarted(msg) {
   (msg.pairs || []).forEach(p => {
     const line = L.polyline(
       [[p.from_lat, p.from_lng], [p.to_lat, p.to_lng]],
-      { color: '#5f6368', weight: 2, dashArray: '8 6', opacity: 0.5, className: 'proximity-line-pending' }
+      { color: '#5f6368', weight: 3, dashArray: '10 6', opacity: 0.8, className: 'proximity-line-pending' }
     ).addTo(state.map);
     // Distance label at midpoint
     const midLat = (p.from_lat + p.to_lat) / 2;
@@ -785,30 +989,53 @@ function onProximityComplete(msg) {
   const content = document.getElementById('proximity-content');
 
   // Build results HTML
+  const formatTag = t => t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   const riskColors = { critical: '#d93025', high: '#e8710a', medium: '#f9ab00', low: '#1e8e3e' };
+  const riskGrads = {
+    critical:'linear-gradient(135deg, #d93025, #b71c1c)',
+    high:'linear-gradient(135deg, #e8710a, #c25e00)',
+    medium:'linear-gradient(135deg, #f9ab00, #e09500)',
+    low:'linear-gradient(135deg, #1e8e3e, #137333)',
+  };
 
   let cardsHtml = pairs.map((p, i) => {
     const col = riskColors[p.risk_level] || '#5f6368';
+    const grad = riskGrads[p.risk_level] || 'linear-gradient(135deg, #5f6368, #3c4043)';
     const distLabel = p.distance_m >= 1000 ? (p.distance_m/1000).toFixed(1)+' km' : p.distance_m+' m';
+    const risk = (p.risk_level||'medium').toUpperCase();
     return `
-      <div class="prox-card" data-pair-idx="${i}" style="border-left: 3px solid ${col}; cursor:pointer" title="Click to view on map">
-        <div class="prox-card-header">
-          <div class="prox-pair-ids">
-            <span class="prox-id">#${String(p.from_id).padStart(3,'0')}</span>
-            <svg width="16" height="12" viewBox="0 0 24 12" fill="none" stroke="${col}" stroke-width="2"><path d="M2 6h20M18 2l4 4-4 4"/></svg>
-            <span class="prox-id">#${String(p.to_id).padStart(3,'0')}</span>
+      <div class="prox-card" data-pair-idx="${i}" title="Click to view on map">
+        <div class="prox-band" style="background:${grad}">
+          <div class="prox-band-top">
+            <span class="prox-band-pair">PAIR ${i+1}</span>
+            <span class="prox-band-risk">${risk}</span>
           </div>
-          <div class="prox-meta">
-            <span class="prox-dist">${distLabel}</span>
-            <span class="prox-risk" style="color:${col}">${(p.risk_level||'medium').toUpperCase()}</span>
+          <div class="prox-band-ids">
+            <span class="prox-band-id">#${String(p.from_id).padStart(3,'0')}</span>
+            <svg width="20" height="10" viewBox="0 0 24 10" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="2"><path d="M2 5h20M18 1l4 4-4 4"/></svg>
+            <span class="prox-band-id">#${String(p.to_id).padStart(3,'0')}</span>
+            <span class="prox-band-dist">${distLabel}</span>
           </div>
         </div>
-        <div class="prox-card-types">
-          <span class="prox-type">${p.from_cat||'—'}</span>
-          <span class="prox-type">${p.to_cat||'—'}</span>
+        <div class="prox-types-row">
+          <div class="prox-type-pair">
+            <span class="prox-type-id">#${String(p.from_id).padStart(3,'0')}</span>
+            <span class="prox-type-cat">${formatTag(p.from_cat||'—')}</span>
+          </div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${col}" stroke-width="2" opacity="0.4"><path d="M8.12 8.12L15.88 15.88M15.88 8.12L8.12 15.88"/></svg>
+          <div class="prox-type-pair" style="text-align:right">
+            <span class="prox-type-id">#${String(p.to_id).padStart(3,'0')}</span>
+            <span class="prox-type-cat">${formatTag(p.to_cat||'—')}</span>
+          </div>
         </div>
-        ${p.ai_insight ? `<div class="prox-insight">${p.ai_insight}</div>` : ''}
-        ${p.action ? `<div class="prox-action"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#5f6368" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> ${p.action}</div>` : ''}
+        ${p.ai_insight ? `<div class="prox-section">
+          <div class="prox-section-label"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--g-blue)" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg> AI Insight</div>
+          <div class="prox-section-text">${p.ai_insight}</div>
+        </div>` : ''}
+        ${p.action ? `<div class="prox-section prox-section-action">
+          <div class="prox-section-label"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--g-orange)" stroke-width="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> Recommended Action</div>
+          <div class="prox-section-text">${p.action}</div>
+        </div>` : ''}
       </div>`;
   }).join('');
 
@@ -831,7 +1058,7 @@ function onProximityComplete(msg) {
 
   // Update map lines with defense-grade tactical visualization
   clearProximityLines();
-  pairs.forEach(p => {
+  pairs.forEach((p, pairIdx) => {
     const col = riskColors[p.risk_level] || '#5f6368';
     const riskLevel = (p.risk_level || 'medium').toUpperCase();
     const distLabel = p.distance_m >= 1000 ? (p.distance_m/1000).toFixed(1)+'km' : p.distance_m+'m';
@@ -842,9 +1069,9 @@ function onProximityComplete(msg) {
     const line = L.polyline(
       [[p.from_lat, p.from_lng], [p.to_lat, p.to_lng]],
       {
-        color: col, weight: 2,
-        dashArray: p.risk_level === 'critical' ? '8 4' : '6 6',
-        opacity: 0.7, lineCap: 'round',
+        color: col, weight: 3.5,
+        dashArray: p.risk_level === 'critical' ? '12 6' : '10 8',
+        opacity: 1, lineCap: 'round',
         className: 'proximity-line-active'
       }
     ).addTo(state.map);
@@ -852,7 +1079,7 @@ function onProximityComplete(msg) {
     // Build intel card HTML
     const popupHtml = `
       <div class="ptac">
-        <div class="ptac-header" style="background: #3c4043;">
+        <div class="ptac-header" style="background: ${col};">
           <div class="ptac-header-top">
             <div class="ptac-link-badge">
               <span class="ptac-node">${String(p.from_id).padStart(3,'0')}</span>
@@ -872,7 +1099,7 @@ function onProximityComplete(msg) {
             <div class="ptac-incident">
               <div class="ptac-incident-label">ORIGIN</div>
               <div class="ptac-incident-id">INC-${String(p.from_id).padStart(3,'0')}</div>
-              <span class="ptac-incident-cat">${p.from_cat || 'general'}</span>
+              <span class="ptac-incident-cat">${formatTag(p.from_cat || 'general')}</span>
             </div>
             <div class="ptac-vs">
               <div class="ptac-vs-icon">
@@ -882,7 +1109,7 @@ function onProximityComplete(msg) {
             <div class="ptac-incident" style="text-align: right;">
               <div class="ptac-incident-label">TARGET</div>
               <div class="ptac-incident-id">INC-${String(p.to_id).padStart(3,'0')}</div>
-              <span class="ptac-incident-cat">${p.to_cat || 'general'}</span>
+              <span class="ptac-incident-cat">${formatTag(p.to_cat || 'general')}</span>
             </div>
           </div>
 
@@ -929,8 +1156,8 @@ function onProximityComplete(msg) {
         </div>
       </div>`;
 
-    // Click the connection line to open draggable intel card
-    line.on('click', () => openDraggableIntel(state.proximityLinesByPair.length));
+    // Click the connection line to open draggable intel card — use captured pairIdx
+    line.on('click', () => openDraggableIntel(pairIdx));
 
     // Distance marker at midpoint
     const midLat = (p.from_lat + p.to_lat) / 2;
@@ -944,8 +1171,8 @@ function onProximityComplete(msg) {
       interactive: true,
     }).addTo(state.map);
 
-    // Click distance label to open intel card too
-    label.on('click', () => openDraggableIntel(state.proximityLinesByPair.length));
+    // Click distance label to open intel card — use captured pairIdx
+    label.on('click', () => openDraggableIntel(pairIdx));
 
     state.proximityLines.push(line, label);
     state.proximityLinesByPair.push({
@@ -956,24 +1183,30 @@ function onProximityComplete(msg) {
     });
   });
 
-  // Auto-open first pair intel card
+  // Auto-open all pair intel cards with stagger for full tactical picture
   if (pairs.length > 0) {
-    setTimeout(() => openDraggableIntel(0), 600);
+    pairs.forEach((_, i) => {
+      setTimeout(() => openDraggableIntel(i), 600 + i * 400);
+    });
   }
 
   showToast(`Proximity: ${pairs.length} correlations · ${msg.inference_time_ms ? (msg.inference_time_ms/1000).toFixed(1)+'s' : '—'}`, 'success');
 }
 
 function clearProximityLines() {
-  closeDraggableIntel();
+  closeAllDraggableIntel();
   state.proximityLines.forEach(l => state.map.removeLayer(l));
   state.proximityLines = [];
   state.proximityLinesByPair = [];
 }
 
-// ─── Draggable Intel Card (C4ISR-grade) ─────────────
+// ─── Draggable Intel Cards (Multi-card C4ISR) ───────
 function openDraggableIntel(idx) {
-  closeDraggableIntel();
+  // Toggle: if this pair's card is already open, close it
+  if (state.activePairPopups.has(idx)) {
+    closeSingleIntel(idx);
+    return;
+  }
 
   const pairRef = state.proximityLinesByPair[idx];
   if (!pairRef) return;
@@ -983,27 +1216,32 @@ function openDraggableIntel(idx) {
   const dlat = pairRef.to[0] - pairRef.from[0];
   const dlng = pairRef.to[1] - pairRef.from[1];
   const len = Math.sqrt(dlat*dlat + dlng*dlng) || 0.001;
-  // Perpendicular direction (rotate 90°), normalized, scaled
-  const offsetScale = 0.006;
-  const offsetLat = mid[0] + (-dlng / len) * offsetScale;
-  const offsetLng = mid[1] + (dlat / len) * offsetScale;
+
+  // Alternate offset direction: even indices go one side, odd the other
+  // Plus slight extra offset per open card to prevent perfect overlap
+  const side = (idx % 2 === 0) ? 1 : -1;
+  const openCount = state.activePairPopups.size;
+  const offsetScale = 0.006 + (openCount * 0.002);
+  const offsetLat = mid[0] + side * (-dlng / len) * offsetScale;
+  const offsetLng = mid[1] + side * (dlat / len) * offsetScale;
 
   // Tether line from midpoint to intel card
   const tether = L.polyline([mid, [offsetLat, offsetLng]], {
-    color: '#9aa0a6', weight: 1, opacity: 0.6,
-    dashArray: '3 3', interactive: false,
+    color: '#1a73e8', weight: 2, opacity: 0.85,
+    dashArray: '6 4', interactive: false,
+    className: 'proximity-tether-line'
   }).addTo(state.map);
 
   // Small anchor dot at midpoint
   const anchor = L.circleMarker(mid, {
-    radius: 3, fillColor: '#9aa0a6', fillOpacity: 0.8,
-    stroke: false, interactive: false,
+    radius: 5, fillColor: '#1a73e8', fillOpacity: 1,
+    color: '#ffffff', weight: 2, stroke: true, interactive: false,
   }).addTo(state.map);
 
   // Draggable intel card marker
   const card = L.marker([offsetLat, offsetLng], {
     draggable: true,
-    zIndexOffset: 5000,
+    zIndexOffset: 5000 + idx,
     icon: L.divIcon({
       className: 'ptac-draggable',
       html: `<div class="ptac-drag-close" title="Close">×</div>${pairRef.popupHtml}`,
@@ -1018,25 +1256,36 @@ function openDraggableIntel(idx) {
     tether.setLatLngs([mid, [pos.lat, pos.lng]]);
   });
 
-  // Close button handler (delegated)
+  // Close button — only close THIS specific card
+  const capturedIdx = idx;
   card.getElement().querySelector('.ptac-drag-close').addEventListener('click', (e) => {
     e.stopPropagation();
-    closeDraggableIntel();
+    closeSingleIntel(capturedIdx);
   });
 
   // Prevent map click-through on the card
   L.DomEvent.disableClickPropagation(card.getElement());
 
-  state.activePairPopup = { card, tether, anchor };
+  state.activePairPopups.set(idx, { card, tether, anchor });
 }
 
-function closeDraggableIntel() {
-  if (state.activePairPopup) {
-    state.map.removeLayer(state.activePairPopup.card);
-    state.map.removeLayer(state.activePairPopup.tether);
-    state.map.removeLayer(state.activePairPopup.anchor);
-    state.activePairPopup = null;
+function closeSingleIntel(idx) {
+  const popup = state.activePairPopups.get(idx);
+  if (popup) {
+    state.map.removeLayer(popup.card);
+    state.map.removeLayer(popup.tether);
+    state.map.removeLayer(popup.anchor);
+    state.activePairPopups.delete(idx);
   }
+}
+
+function closeAllDraggableIntel() {
+  state.activePairPopups.forEach((popup) => {
+    state.map.removeLayer(popup.card);
+    state.map.removeLayer(popup.tether);
+    state.map.removeLayer(popup.anchor);
+  });
+  state.activePairPopups.clear();
 }
 
 function navigateToPair(idx) {
