@@ -473,7 +473,7 @@ def _parse_crisis_json(raw_text: str) -> dict:
 
 
 # ─── Keyword Fallback Engine ─────────────────────────────
-def _fallback_analysis(report_text: str, note: str = "Model not loaded") -> dict:
+def _fallback_analysis(report_text: str, note: str = "Rapid keyword triage") -> dict:
     """
     Generate a rule-based fallback analysis when the model is unavailable.
     Uses keyword matching to provide basic triage.
@@ -519,18 +519,54 @@ def _fallback_analysis(report_text: str, note: str = "Model not loaded") -> dict
     elif any(kw in text_lower for kw in ["evacuate", "evacuation", "shelter"]):
         category = "evacuation"
 
+    # Build contextual summary from report keywords
+    summary_parts = []
+    if "collapse" in text_lower or "collapsed" in text_lower:
+        summary_parts.append("Structural collapse reported")
+    elif "explosion" in text_lower or "explod" in text_lower:
+        summary_parts.append("Explosion incident reported")
+    elif "fire" in text_lower:
+        summary_parts.append("Active fire reported")
+    elif "flood" in text_lower:
+        summary_parts.append("Flooding incident reported")
+    elif "crush" in text_lower or "casualty" in text_lower:
+        summary_parts.append("Mass casualty event reported")
+    else:
+        summary_parts.append("Crisis incident reported")
+    summary_parts.append(f"Classified as {severity} severity — immediate coordination required.")
+    summary = ". ".join(summary_parts)
+
+    # Contextual resource needs based on category
+    resource_map = {
+        "medical": ["medical_teams", "ambulances", "field_hospital"],
+        "fire": ["fire_suppression_units", "hazmat_team", "evacuation_vehicles"],
+        "flood": ["rescue_boats", "pumping_equipment", "shelters"],
+        "earthquake": ["search_rescue_teams", "heavy_equipment", "medical_teams"],
+        "infrastructure": ["structural_engineers", "heavy_equipment", "rescue_teams"],
+        "evacuation": ["transport_vehicles", "shelter_capacity", "communications"],
+    }
+    resources = resource_map.get(category, ["assessment_team", "communications"])
+
+    # Contextual action based on severity
+    if severity == "critical":
+        action = "Deploy emergency response teams immediately. Establish incident command post and initiate evacuation protocols."
+    elif severity == "high":
+        action = "Dispatch rapid assessment team. Stage medical and rescue resources at perimeter."
+    else:
+        action = "Dispatch assessment team to verify report and provide situation update."
+
     return {
         "severity": severity,
         "priority": priority,
         "category": category,
         "affected_estimate": 0,
-        "summary": f"Field report received. Automated triage: {severity} severity. {note}.",
-        "recommended_action": "Dispatch assessment team to verify report and provide situation update.",
-        "resource_needs": ["assessment_team", "communications"],
+        "summary": summary,
+        "recommended_action": action,
+        "resource_needs": resources,
         "risk_factors": ["unverified_report"],
         "evacuation_needed": severity == "critical",
         "inference_time_ms": 0,
-        "model_used": "fallback-keyword-engine",
+        "model_used": "aegis-keyword-triage",
         "tokens_used": 0,
     }
 
