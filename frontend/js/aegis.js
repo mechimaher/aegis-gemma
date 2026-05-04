@@ -120,7 +120,7 @@ function hideCrosshair() {
 function placePin(lat, lng) {
   if (state.pendingPin) state.map.removeLayer(state.pendingPin);
   state.pendingPin = L.circleMarker([lat, lng], {
-    radius: 12, color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 0.4, weight: 2,
+    radius: 12, color: '#1a73e8', fillColor: '#1a73e8', fillOpacity: 0.3, weight: 2,
   }).addTo(state.map);
   document.getElementById('input-lat').value = lat.toFixed(6);
   document.getElementById('input-lng').value = lng.toFixed(6);
@@ -317,9 +317,9 @@ function buildPopupHTML(report, sev, a) {
   const sevColors = { critical:'#d93025', high:'#e8710a', medium:'#f9ab00', low:'#1e8e3e', pending:'#5f6368', unknown:'#5f6368' };
   const sevGrad = {
     critical:'linear-gradient(135deg, #d93025, #b71c1c)',
-    high:'linear-gradient(135deg, #e8710a, #bf5600)',
-    medium:'linear-gradient(135deg, #f9ab00, #e09100)',
-    low:'linear-gradient(135deg, #1e8e3e, #0d652d)',
+    high:'linear-gradient(135deg, #3c4043, #202124)',
+    medium:'linear-gradient(135deg, #3c4043, #202124)',
+    low:'linear-gradient(135deg, #3c4043, #202124)',
     pending:'linear-gradient(135deg, #5f6368, #3c4043)',
     unknown:'linear-gradient(135deg, #5f6368, #3c4043)',
   };
@@ -365,7 +365,7 @@ function buildPopupHTML(report, sev, a) {
 
       <!-- AI summary (one compact block) -->
       ${a.summary ? `<div class="pe-intel">
-        <div class="pe-intel-label"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${col}" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg> AI Intel</div>
+        <div class="pe-intel-label"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--g-blue)" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg> AI Intel</div>
         <div class="pe-intel-text">${a.summary}</div>
       </div>` : `<div class="pe-intel">
         <div class="pe-intel-text" style="color:var(--on-surface-dim)">${(report.report_text || '').substring(0, 120)}${(report.report_text || '').length > 120 ? '…' : ''}</div>
@@ -373,7 +373,7 @@ function buildPopupHTML(report, sev, a) {
 
       ${a.recommended_action ? `
       <div class="pe-cmd">
-        <span class="pe-cmd-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#00897b" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
+        <span class="pe-cmd-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5f6368" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
         <span class="pe-cmd-text">${a.recommended_action}</span>
       </div>` : ''}
 
@@ -478,9 +478,9 @@ function showAiAnalysis(report) {
         <span style="font-family:var(--font-mono);font-size:12px;color:var(--on-surface-variant)">${p}/10</span>
       </div></div>
     <div class="ai-field"><div class="ai-field-label">Tactical Summary</div><div class="ai-field-value">${a.summary||'Analysis pending...'}</div></div>
-    <div class="ai-field"><div class="ai-field-label">Immediate Action</div><div class="ai-field-value" style="color:var(--g-teal)">${a.recommended_action||'—'}</div></div>
+    <div class="ai-field"><div class="ai-field-label">Immediate Action</div><div class="ai-field-value">${a.recommended_action||'—'}</div></div>
     <div class="ai-field"><div class="ai-field-label">Incident Type</div><div class="ai-field-value">${a.category||'general'} ${a.evacuation_needed?'<span style="color:var(--g-red);font-weight:700"> — EVACUATION REQUIRED</span>':''}</div></div>
-    ${a.affected_estimate>0?`<div class="ai-field"><div class="ai-field-label">Estimated Affected</div><div class="ai-field-value" style="font-family:var(--font-mono);font-size:18px;color:var(--g-yellow)">${a.affected_estimate}</div></div>`:''}
+    ${a.affected_estimate>0?`<div class="ai-field"><div class="ai-field-label">Estimated Affected</div><div class="ai-field-value" style="font-family:var(--font-mono);font-size:18px;font-weight:700">${a.affected_estimate}</div></div>`:''}
     ${res?`<div class="ai-field"><div class="ai-field-label">Required Resources</div><div class="ai-tags">${res}</div></div>`:''}
     ${risks?`<div class="ai-field"><div class="ai-field-label">Risk Factors</div><div class="ai-tags">${risks}</div></div>`:''}
     <div class="inference-meta">

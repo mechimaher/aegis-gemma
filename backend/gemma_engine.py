@@ -284,7 +284,7 @@ async def analyze_crisis_report(report_text: str, latitude: float = 0.0,
     if not is_model_loaded():
         return _fallback_analysis(report_text)
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     try:
         result = await loop.run_in_executor(
             _thread_pool,
@@ -310,7 +310,7 @@ async def analyze_crisis_report_streaming(
     if not is_model_loaded():
         return _fallback_analysis(report_text)
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     try:
         result = await loop.run_in_executor(
             _thread_pool,

@@ -19,7 +19,7 @@ import logging
 import asyncio
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
-from concurrent.futures import ThreadPoolExecutor
+
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
@@ -382,7 +382,7 @@ async def _stream_briefing(prompt: str, report_count: int):
         })
 
         token_queue = asyncio.Queue()
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         def on_token(token: str):
             asyncio.run_coroutine_threadsafe(token_queue.put(token), loop)
@@ -408,8 +408,7 @@ async def _stream_briefing(prompt: str, report_count: int):
                 elapsed = _time.time() - start
             return "".join(chunks).strip(), int(elapsed * 1000), len(chunks)
 
-        _pool = ThreadPoolExecutor(max_workers=1)
-        inference_future = loop.run_in_executor(_pool, _run_streaming)
+        inference_future = loop.run_in_executor(gemma_engine._thread_pool, _run_streaming)
 
         # Drain token queue and broadcast each token
         token_count = 0
@@ -426,7 +425,6 @@ async def _stream_briefing(prompt: str, report_count: int):
                 continue
 
         text, time_ms, chunks = await inference_future
-        _pool.shutdown(wait=False)
 
         await manager.broadcast({
             "type": "briefing_complete",
@@ -609,7 +607,7 @@ async def _stream_proximity(prompt: str, pairs: list):
         })
 
         token_queue = asyncio.Queue()
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         def on_token(token: str):
             asyncio.run_coroutine_threadsafe(token_queue.put(token), loop)
@@ -635,8 +633,7 @@ async def _stream_proximity(prompt: str, pairs: list):
                 elapsed = _time.time() - start
             return "".join(chunks).strip(), int(elapsed * 1000), len(chunks)
 
-        _pool = ThreadPoolExecutor(max_workers=1)
-        inference_future = loop.run_in_executor(_pool, _run_streaming)
+        inference_future = loop.run_in_executor(gemma_engine._thread_pool, _run_streaming)
 
         token_count = 0
         while not inference_future.done() or not token_queue.empty():
@@ -652,7 +649,6 @@ async def _stream_proximity(prompt: str, pairs: list):
                 continue
 
         raw_text, time_ms, chunks = await inference_future
-        _pool.shutdown(wait=False)
 
         # Parse the AI response into per-pair insights
         insights = _parse_proximity_response(raw_text, pairs)
