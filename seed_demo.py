@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Aegis-Gemma: Demo Scenario Seeder
+AegisGemma: Demo Scenario Seeder
 Pre-populates the database with realistic crisis scenarios for demo presentations.
 """
 
@@ -37,7 +37,7 @@ DEMO_SCENARIOS = [
 async def seed_demo_data(use_model: bool = True):
     """Seed the database with demo scenarios."""
     print("=" * 50)
-    print("  AEGIS-GEMMA Demo Data Seeder")
+    print("  AEGISGEMMA Demo Data Seeder")
     print("=" * 50)
 
     await init_db()

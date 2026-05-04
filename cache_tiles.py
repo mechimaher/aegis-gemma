@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Aegis-Gemma: Offline Map Tile Cacher
+AegisGemma: Offline Map Tile Cacher
 Downloads CartoDB Dark Matter tiles for a target region and stores them
 as individual PNGs in the tiles/ directory for fully offline use.
 
@@ -23,7 +23,7 @@ from math import floor, log, tan, pi, cos
 # ─── Configuration ───────────────────────────────────
 TILE_URL = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png"
 SUBDOMAINS = ["a", "b", "c", "d"]
-USER_AGENT = "Aegis-Gemma/1.0 Offline Tile Cacher"
+USER_AGENT = "AegisGemma/1.0 Offline Tile Cacher"
 
 # Predefined regions
 REGIONS = {
@@ -115,7 +115,7 @@ def create_mbtiles(tiles_dir, output_path, region_name):
     db.execute("""CREATE UNIQUE INDEX idx_tiles ON tiles (zoom_level, tile_column, tile_row)""")
 
     # Metadata
-    db.execute("INSERT INTO metadata VALUES ('name', ?)", (f"Aegis-Gemma: {region_name}",))
+    db.execute("INSERT INTO metadata VALUES ('name', ?)", (f"AegisGemma: {region_name}",))
     db.execute("INSERT INTO metadata VALUES ('format', 'png')")
     db.execute("INSERT INTO metadata VALUES ('type', 'baselayer')")
     db.execute("INSERT INTO metadata VALUES ('version', '1.0')")
@@ -154,7 +154,7 @@ def create_mbtiles(tiles_dir, output_path, region_name):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Aegis-Gemma Offline Tile Cacher")
+    parser = argparse.ArgumentParser(description="AegisGemma Offline Tile Cacher")
     parser.add_argument("--region", choices=list(REGIONS.keys()), default="doha",
                         help="Predefined region to cache (default: doha)")
     parser.add_argument("--zoom-min", type=int, help="Minimum zoom level (overrides region default)")
@@ -173,7 +173,7 @@ def main():
     total_tiles = count_tiles(bounds, zoom_min, zoom_max)
 
     print("═══════════════════════════════════════════")
-    print("  🛡️  AEGIS-GEMMA Tile Cacher")
+    print("  🛡️  AEGISGEMMA Tile Cacher")
     print("═══════════════════════════════════════════")
     print(f"  Region:  {region['name']}")
     print(f"  Bounds:  {bounds}")

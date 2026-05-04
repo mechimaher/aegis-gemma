@@ -1,1 +1,1 @@
-# Aegis-Gemma Backend Package
+# AegisGemma Backend Package

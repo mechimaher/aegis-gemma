@@ -1,5 +1,5 @@
 """
-Aegis-Gemma: FastAPI Crisis Coordination Server
+AegisGemma: FastAPI Crisis Coordination Server
 Air-gapped, zero-trust offline intelligence server.
 
 Architecture:
@@ -87,13 +87,13 @@ _start_time = time.time()
 async def lifespan(app: FastAPI):
     """Initialize database and attempt model loading on startup."""
     logger.info("=" * 50)
-    logger.info("  AEGIS-GEMMA Crisis Coordinator v3")
+    logger.info("  AEGISGEMMA Crisis Coordinator v3")
     logger.info("  Air-Gapped Cognitive Intelligence Server")
     logger.info("=" * 50)
 
     await init_db()
     logger.info("Database initialized")
-    await log_event("system", "Aegis-Gemma server started")
+    await log_event("system", "AegisGemma server started")
 
     logger.info("Loading Gemma model...")
     model_loaded = load_model()
@@ -110,12 +110,12 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    logger.info("Aegis-Gemma shutting down.")
+    logger.info("AegisGemma shutting down.")
 
 
 # ─── FastAPI App ───────────────────────────────────────────
 app = FastAPI(
-    title="Aegis-Gemma",
+    title="AegisGemma",
     description="Air-Gapped Cognitive Crisis Coordinator — Powered by Gemma 4",
     version="3.0.0",
     lifespan=lifespan,
@@ -733,7 +733,7 @@ async def system_status():
     """Full system health check."""
     return {
         "status": "operational",
-        "service": "Aegis-Gemma Crisis Coordinator",
+        "service": "AegisGemma Crisis Coordinator",
         "version": "3.0.0",
         "air_gapped": True,
         "model": get_model_status(),

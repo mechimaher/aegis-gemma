@@ -1,5 +1,5 @@
 """
-Aegis-Gemma: SQLite Database Layer
+AegisGemma: SQLite Database Layer
 Zero-dependency offline persistence for crisis reports and resource tracking.
 """
 

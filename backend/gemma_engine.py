@@ -1,5 +1,5 @@
 """
-Aegis-Gemma: Local Gemma Inference Engine
+AegisGemma: Local Gemma Inference Engine
 Wraps llama-cpp-python for air-gapped, zero-trust LLM inference.
 Produces structured crisis-response JSON from unstructured field reports.
 

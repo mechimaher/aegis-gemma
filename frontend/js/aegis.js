@@ -1,5 +1,5 @@
 /**
- * AEGIS-GEMMA — Crisis Coordination Dashboard
+ * AEGISGEMMA — Crisis Coordination Dashboard
  */
 
 const state = {
@@ -1025,7 +1025,7 @@ function onProximityComplete(msg) {
           </div>` : ''}
 
           <div class="ptac-footer">
-            <span>AEGIS-GEMMA PROXIMITY INTEL</span>
+            <span>AEGISGEMMA PROXIMITY INTEL</span>
             <span class="ptac-footer-gemma">GEMMA 4 E2B</span>
           </div>
         </div>

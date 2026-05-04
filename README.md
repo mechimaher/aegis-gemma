@@ -1,4 +1,4 @@
-# AEGIS-GEMMA: Air-gapped Edge Gemma Intelligence System
+# AEGISGEMMA: Air-gapped Edge Gemma Intelligence System
 
 > **First-responder tactical AI that runs 100% offline — powered by Google Gemma 4 E2B with GPU-accelerated inference via llama.cpp. Zero cloud. Zero latency. Zero excuses.**
 
@@ -10,11 +10,11 @@ When disaster strikes, **internet is the first casualty**. Cell towers collapse,
 
 Every existing crisis AI tool fails at this exact moment because they depend on cloud inference.
 
-**AEGIS-GEMMA doesn't.**
+**AEGISGEMMA doesn't.**
 
 ## Three Gemma-Powered Intelligence Features
 
-AEGIS-GEMMA leverages Gemma 4 E2B in three distinct ways, each demonstrating a different dimension of on-device AI capability:
+AEGISGEMMA leverages Gemma 4 E2B in three distinct ways, each demonstrating a different dimension of on-device AI capability:
 
 ### Feature 1: Real-Time Report Analysis
 Individual crisis reports are analyzed by Gemma 4 with token-by-token streaming. Each report receives structured JSON output: severity classification, priority score (1-10), required resources, evacuation assessment, risk factors, and recommended immediate action.
@@ -57,7 +57,7 @@ Keyword-based triage provides instant classification as a safety net. This ensur
 
 ```
 ┌────────────────────────────────────────────────────────────┐
-│                    AEGIS-GEMMA                             │
+│                    AEGISGEMMA                             │
 │           100% Air-Gapped · GPU-Accelerated                │
 ├────────────────────────────────────────────────────────────┤
 │                                                            │
@@ -167,7 +167,7 @@ Open **http://localhost:8080** in any modern browser.
 
 ## Demo Walkthrough
 
-AEGIS-GEMMA includes a one-click demo (`Demo` button or `Ctrl+Shift+D`) that showcases all three Gemma features in sequence:
+AEGISGEMMA includes a one-click demo (`Demo` button or `Ctrl+Shift+D`) that showcases all three Gemma features in sequence:
 
 1. **Tactical Map** — 3 pre-seeded Doha crisis scenarios appear with severity-colored markers, impact zones, and ACTIVE lifecycle indicators
 2. **New Incident** — Pin drop with typewriter-effect incident description
