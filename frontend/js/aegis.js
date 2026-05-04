@@ -594,19 +594,17 @@ function initWebSocket() {
   try {
     state.ws = new WebSocket(`${proto}//${location.host}/ws`);
     state.ws.onopen = () => {
-      document.getElementById('ws-status-dot').className = 'status-dot online';
       state.wsRetries = 0;
       if (state.heartbeatTimer) clearInterval(state.heartbeatTimer);
       state.heartbeatTimer = setInterval(() => { if (state.ws?.readyState===1) state.ws.send('ping'); }, 30000);
     };
     state.ws.onmessage = e => { try { handleWS(JSON.parse(e.data)); } catch(x){} };
     state.ws.onclose = () => {
-      document.getElementById('ws-status-dot').className = 'status-dot offline';
       if (state.heartbeatTimer) { clearInterval(state.heartbeatTimer); state.heartbeatTimer = null; }
       if (state.wsRetries < 10) { state.wsRetries++; setTimeout(initWebSocket, Math.min(1000*Math.pow(2,state.wsRetries),30000)); }
     };
-    state.ws.onerror = () => { document.getElementById('ws-status-dot').className = 'status-dot offline'; };
-  } catch(e) { document.getElementById('ws-status-dot').className = 'status-dot offline'; }
+    state.ws.onerror = () => {};
+  } catch(e) {}
 }
 
 function handleWS(msg) {
