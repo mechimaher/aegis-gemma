@@ -575,7 +575,7 @@ async function loadDashboard() {
       const dot = document.getElementById('ai-status-dot');
       const txt = document.getElementById('ai-status-text');
       if (data.model_status.loaded) {
-        dot.className = 'status-dot online'; txt.textContent = 'AI Online';
+        dot.className = 'status-dot online'; txt.textContent = 'Gemma Ready';
         document.getElementById('model-name').textContent = 'Gemma 4 E2B';
         document.getElementById('inference-mode').textContent = data.model_status.mode || 'local';
       } else {
