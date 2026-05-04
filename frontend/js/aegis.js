@@ -10,6 +10,7 @@ const state = {
   recognition: null, isListening: false,
   crosshair: null,
   proximityLines: [],
+  proximityLinesByPair: [],
   proximityBuffer: '',
 };
 
@@ -901,7 +902,7 @@ function onProximityComplete(msg) {
     const col = riskColors[p.risk_level] || '#5f6368';
     const distLabel = p.distance_m >= 1000 ? (p.distance_m/1000).toFixed(1)+' km' : p.distance_m+' m';
     return `
-      <div class="prox-card" style="border-left: 3px solid ${col}">
+      <div class="prox-card" data-pair-idx="${i}" style="border-left: 3px solid ${col}; cursor:pointer" title="Click to view on map">
         <div class="prox-card-header">
           <div class="prox-pair-ids">
             <span class="prox-id">#${String(p.from_id).padStart(3,'0')}</span>
@@ -930,6 +931,14 @@ function onProximityComplete(msg) {
       </div>
       ${cardsHtml}
     </div>`;
+
+  // Attach click-to-navigate handlers
+  content.querySelectorAll('.prox-card[data-pair-idx]').forEach(card => {
+    card.addEventListener('click', () => {
+      const idx = parseInt(card.dataset.pairIdx, 10);
+      navigateToPair(idx, pairs);
+    });
+  });
 
   // Update map lines with defense-grade tactical visualization
   clearProximityLines();
@@ -1053,7 +1062,8 @@ function onProximityComplete(msg) {
       interactive: false,
     }).addTo(state.map);
 
-    state.proximityLines.push(glow, line, label);
+    state.proximityLines.push(line, label);
+    state.proximityLinesByPair.push({ line, label, from: [p.from_lat, p.from_lng], to: [p.to_lat, p.to_lng] });
   });
 
   // Auto-open first pair popup for instant impact
@@ -1068,5 +1078,25 @@ function onProximityComplete(msg) {
 function clearProximityLines() {
   state.proximityLines.forEach(l => state.map.removeLayer(l));
   state.proximityLines = [];
+  state.proximityLinesByPair = [];
+}
+
+function navigateToPair(idx, pairs) {
+  const pairRef = state.proximityLinesByPair[idx];
+  if (!pairRef) return;
+
+  // Switch to map tab
+  switchTab('map');
+
+  // Fly to fit both incidents
+  const bounds = L.latLngBounds([pairRef.from, pairRef.to]);
+  state.map.flyToBounds(bounds, { padding: [80, 80], duration: 0.8, maxZoom: 15 });
+
+  // Open the popup after the fly animation completes
+  setTimeout(() => {
+    if (pairRef.line && pairRef.line._popup) {
+      pairRef.line.openPopup();
+    }
+  }, 900);
 }
 

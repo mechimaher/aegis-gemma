@@ -366,7 +366,7 @@ body { font-family: var(--font-sans); background: var(--surface-1); color: var(-
   padding: 14px 20px; border-bottom: 1px solid var(--outline-variant);
   transition: background 0.15s;
 }
-.prox-card:hover { background: rgba(26,115,232,0.03); }
+.prox-card:hover { background: var(--surface-1); }
 .prox-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
 .prox-pair-ids { display: flex; align-items: center; gap: 6px; }
 .prox-id { font-family: var(--font-mono); font-size: 13px; font-weight: 700; color: var(--on-surface); }
