@@ -295,8 +295,6 @@ body { font-family: var(--font-sans); background: var(--surface-1); color: var(-
 .stat-item { display: flex; align-items: center; gap: 5px; }
 .stat-item .stat-value { font-family: var(--font-mono); font-weight: 600; color: var(--on-surface-variant); }
 .bottombar-right { display: flex; gap: 6px; align-items: center; font-weight: 500; }
-.bottombar-right .google-g { display: inline-flex; gap: 1px; font-weight: 700; font-size: 12px; }
-.sep { color: var(--outline); margin: 0 2px; }
 
 /* ── Briefing View ───────────────────────── */
 .briefing-container { padding: 48px 40px; max-width: 840px; margin: 0 auto; height: 100%; overflow-y: auto; }
