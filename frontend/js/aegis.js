@@ -7,11 +7,11 @@ const state = {
   ws: null, wsRetries: 0, reports: [], reportIds: new Set(),
   submittingId: null, heartbeatTimer: null,
   streamBuffers: {},
-  recognition: null, isListening: false,
   crosshair: null,
   proximityLines: [],
   proximityLinesByPair: [],
   proximityBuffer: '',
+  activePairPopup: null,
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -960,7 +960,7 @@ function onProximityComplete(msg) {
       }
     ).addTo(state.map);
 
-    // Build popup HTML
+    // Build intel card HTML
     const popupHtml = `
       <div class="ptac">
         <div class="ptac-header" style="background: #3c4043;">
@@ -1040,15 +1040,8 @@ function onProximityComplete(msg) {
         </div>
       </div>`;
 
-    // Bind popup to the line (click to open)
-    line.bindPopup(popupHtml, {
-      className: 'prox-popup',
-      maxWidth: 420,
-      minWidth: 340,
-      closeButton: true,
-      autoPan: true,
-      autoPanPadding: [40, 40],
-    });
+    // Click the connection line to open draggable intel card
+    line.on('click', () => openDraggableIntel(state.proximityLinesByPair.length));
 
     // Distance marker at midpoint
     const midLat = (p.from_lat + p.to_lat) / 2;
@@ -1059,44 +1052,113 @@ function onProximityComplete(msg) {
         html: `<span style="background:${col};color:white">${distLabel}</span>`,
         iconSize: [70, 24], iconAnchor: [35, 12],
       }),
-      interactive: false,
+      interactive: true,
     }).addTo(state.map);
 
+    // Click distance label to open intel card too
+    label.on('click', () => openDraggableIntel(state.proximityLinesByPair.length));
+
     state.proximityLines.push(line, label);
-    state.proximityLinesByPair.push({ line, label, from: [p.from_lat, p.from_lng], to: [p.to_lat, p.to_lng] });
+    state.proximityLinesByPair.push({
+      line, label, popupHtml,
+      from: [p.from_lat, p.from_lng],
+      to: [p.to_lat, p.to_lng],
+      mid: [midLat, midLng],
+    });
   });
 
-  // Auto-open first pair popup for instant impact
+  // Auto-open first pair intel card
   if (pairs.length > 0) {
-    const firstLine = state.proximityLines.find(l => l.bindPopup && l._popup);
-    if (firstLine) setTimeout(() => firstLine.openPopup(), 600);
+    setTimeout(() => openDraggableIntel(0), 600);
   }
 
   showToast(`Proximity: ${pairs.length} correlations · ${msg.inference_time_ms ? (msg.inference_time_ms/1000).toFixed(1)+'s' : '—'}`, 'success');
 }
 
 function clearProximityLines() {
+  closeDraggableIntel();
   state.proximityLines.forEach(l => state.map.removeLayer(l));
   state.proximityLines = [];
   state.proximityLinesByPair = [];
 }
 
-function navigateToPair(idx, pairs) {
+// ─── Draggable Intel Card (C4ISR-grade) ─────────────
+function openDraggableIntel(idx) {
+  closeDraggableIntel();
+
   const pairRef = state.proximityLinesByPair[idx];
   if (!pairRef) return;
 
-  // Switch to map tab
+  const mid = pairRef.mid;
+  // Calculate perpendicular offset so card doesn't cover the line
+  const dlat = pairRef.to[0] - pairRef.from[0];
+  const dlng = pairRef.to[1] - pairRef.from[1];
+  const len = Math.sqrt(dlat*dlat + dlng*dlng) || 0.001;
+  // Perpendicular direction (rotate 90°), normalized, scaled
+  const offsetScale = 0.006;
+  const offsetLat = mid[0] + (-dlng / len) * offsetScale;
+  const offsetLng = mid[1] + (dlat / len) * offsetScale;
+
+  // Tether line from midpoint to intel card
+  const tether = L.polyline([mid, [offsetLat, offsetLng]], {
+    color: '#9aa0a6', weight: 1, opacity: 0.6,
+    dashArray: '3 3', interactive: false,
+  }).addTo(state.map);
+
+  // Small anchor dot at midpoint
+  const anchor = L.circleMarker(mid, {
+    radius: 3, fillColor: '#9aa0a6', fillOpacity: 0.8,
+    stroke: false, interactive: false,
+  }).addTo(state.map);
+
+  // Draggable intel card marker
+  const card = L.marker([offsetLat, offsetLng], {
+    draggable: true,
+    zIndexOffset: 5000,
+    icon: L.divIcon({
+      className: 'ptac-draggable',
+      html: `<div class="ptac-drag-close" title="Close">×</div>${pairRef.popupHtml}`,
+      iconSize: [340, null],
+      iconAnchor: [170, 0],
+    }),
+  }).addTo(state.map);
+
+  // Update tether on drag
+  card.on('drag', (e) => {
+    const pos = e.target.getLatLng();
+    tether.setLatLngs([mid, [pos.lat, pos.lng]]);
+  });
+
+  // Close button handler (delegated)
+  card.getElement().querySelector('.ptac-drag-close').addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeDraggableIntel();
+  });
+
+  // Prevent map click-through on the card
+  L.DomEvent.disableClickPropagation(card.getElement());
+
+  state.activePairPopup = { card, tether, anchor };
+}
+
+function closeDraggableIntel() {
+  if (state.activePairPopup) {
+    state.map.removeLayer(state.activePairPopup.card);
+    state.map.removeLayer(state.activePairPopup.tether);
+    state.map.removeLayer(state.activePairPopup.anchor);
+    state.activePairPopup = null;
+  }
+}
+
+function navigateToPair(idx) {
+  const pairRef = state.proximityLinesByPair[idx];
+  if (!pairRef) return;
+
   switchTab('map');
 
-  // Fly to fit both incidents
   const bounds = L.latLngBounds([pairRef.from, pairRef.to]);
   state.map.flyToBounds(bounds, { padding: [80, 80], duration: 0.8, maxZoom: 15 });
 
-  // Open the popup after the fly animation completes
-  setTimeout(() => {
-    if (pairRef.line && pairRef.line._popup) {
-      pairRef.line.openPopup();
-    }
-  }, 900);
+  setTimeout(() => openDraggableIntel(idx), 900);
 }
 

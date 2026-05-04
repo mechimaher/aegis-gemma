@@ -567,6 +567,26 @@ body { font-family: var(--font-sans); background: var(--surface-1); color: var(-
   background: var(--g-blue);
 }
 
+/* ── Draggable Intel Card (C4ISR) ──────── */
+.ptac-draggable {
+  background: none !important; border: none !important;
+  box-shadow: none !important; cursor: grab;
+}
+.ptac-draggable:active { cursor: grabbing; }
+.ptac-draggable .ptac {
+  box-shadow: 0 4px 24px rgba(0,0,0,0.15), 0 1px 4px rgba(0,0,0,0.08);
+  border-radius: 12px; overflow: hidden;
+}
+.ptac-drag-close {
+  position: absolute; top: 8px; right: 10px; z-index: 10;
+  width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+  font-size: 16px; color: rgba(255,255,255,0.5); cursor: pointer;
+  border-radius: 50%; transition: all 0.15s;
+}
+.ptac-drag-close:hover {
+  color: white; background: rgba(255,255,255,0.15);
+}
+
 /* ── Proximity Lines ───────────────────── */
 .proximity-line-active { animation: line-dash 30s linear infinite; }
 @keyframes line-dash { to { stroke-dashoffset: -200; } }
