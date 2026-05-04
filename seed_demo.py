@@ -17,18 +17,18 @@ from backend.gemma_engine import (
 # Demo Scenarios
 DEMO_SCENARIOS = [
     {
-        "latitude": 25.2867,
-        "longitude": 51.5340,
+        "latitude": 25.3200,
+        "longitude": 51.5280,
         "report_text": "Building collapse at Al Corniche intersection. Structural failure in 6-story residential building. Estimated 25 residents trapped. Dust cloud reducing visibility. Adjacent buildings showing stress fractures.",
     },
     {
-        "latitude": 25.2750,
-        "longitude": 51.5450,
+        "latitude": 25.2550,
+        "longitude": 51.5580,
         "report_text": "Industrial fire at warehouse complex in Industrial Area. Chemical storage facility involved. Toxic smoke plume drifting northeast toward residential zone. 3 workers injured, 2 unaccounted for.",
     },
     {
-        "latitude": 25.3000,
-        "longitude": 51.5100,
+        "latitude": 25.3100,
+        "longitude": 51.4900,
         "report_text": "Mass casualty incident at sports stadium. Crowd crush during evacuation. Approximately 50 people injured, 12 in critical condition. Medical facilities overwhelmed. Need additional ambulances and field hospitals.",
     },
 ]

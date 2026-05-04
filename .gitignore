@@ -11,6 +11,7 @@ venv/
 data/*.db
 *.db
 *.sqlite
+*.mbtiles
 
 # Model weights (too large for git — download separately)
 models/*.gguf

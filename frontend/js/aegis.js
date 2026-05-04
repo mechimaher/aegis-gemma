@@ -38,12 +38,12 @@ function initMap() {
   state.map = L.map('map', {
     center: [25.2854, 51.5310], zoom: 13,
     zoomControl: true, attributionControl: false,
-    maxZoom: 16, minZoom: 12,
-    maxBounds: [[25.12, 51.32], [25.52, 51.72]],
+    maxZoom: 16, minZoom: 7,
+    maxBounds: [[24.0, 50.0], [26.5, 53.0]],
     maxBoundsViscosity: 1.0,
   });
   // Tile layer with CSS class for professional filter treatment
-  const tiles = L.tileLayer('/tiles/{z}/{x}/{y}.png', { maxZoom: 16, maxNativeZoom: 16, className: 'map-tiles' });
+  const tiles = L.tileLayer('/tiles/{z}/{x}/{y}.png', { maxZoom: 16, minZoom: 7, maxNativeZoom: 16, className: 'map-tiles' });
   tiles.addTo(state.map);
 
   // Impact radius layer (rendered below markers)
@@ -287,7 +287,10 @@ function addReportToMap(report) {
     iconSize: [sz, sz],
     iconAnchor: [sz/2, sz/2],
   });
-  const marker = L.marker([report.latitude, report.longitude], { icon, zIndexOffset: sev === 'critical' ? 1000 : sev === 'high' ? 500 : 0 });
+  // Newer reports (higher IDs) get higher z-index so they always render on top
+  const baseZ = sev === 'critical' ? 1000 : sev === 'high' ? 500 : 0;
+  const idZ = (report.id || 0) * 10;
+  const marker = L.marker([report.latitude, report.longitude], { icon, zIndexOffset: baseZ + idZ });
   marker.addTo(state.map);
 
   // Enterprise popup
@@ -695,23 +698,24 @@ function showToast(msg, type='info') {
 // Triggered by Ctrl+Shift+D or the floating demo button
 const DEMO_SCENARIOS = [
   {
-    lat: 25.2930, lng: 51.5350,
+    lat: 25.2850, lng: 51.5150,
     text: "Chemical plant explosion in industrial zone. Massive fire with toxic black smoke spreading southeast. 15 workers critically injured, 3 unaccounted for. Residential area 500 meters downwind — immediate evacuation needed. Secondary explosion risk from adjacent fuel storage tanks.",
     label: "Chemical Plant Explosion"
   },
   {
-    lat: 25.2780, lng: 51.5200,
+    lat: 25.2700, lng: 51.5380,
     text: "Major earthquake struck residential district. Two 8-story apartment buildings have partially collapsed. Estimated 150 residents trapped under debris. Gas mains ruptured, strong smell of gas. Multiple fires breaking out. Aftershock activity continuing.",
     label: "Earthquake — Residential Collapse"
   },
   {
-    lat: 25.2650, lng: 51.5440,
+    lat: 25.3050, lng: 51.5500,
     text: "Flash flooding on coastal highway after storm surge. 60+ vehicles submerged. Bus with 35 passengers stranded in rising water. Water level at 2 meters and climbing. Power lines down in flood zone creating electrocution hazard.",
     label: "Flash Flood — Highway"
   }
 ];
 
 let demoRunning = false;
+let demoScenarioIndex = 0;
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
@@ -731,7 +735,12 @@ async function runDemo() {
   if (demoRunning) { showToast('Demo already running.', 'warning'); return; }
   demoRunning = true;
 
-  const scenario = DEMO_SCENARIOS[Math.floor(Math.random() * DEMO_SCENARIOS.length)];
+  // Cycle through scenarios sequentially (never repeat until all 3 used)
+  const scenario = { ...DEMO_SCENARIOS[demoScenarioIndex % DEMO_SCENARIOS.length] };
+  demoScenarioIndex++;
+  // Add small coordinate jitter (~50-100m) to prevent exact overlaps on repeat cycles
+  scenario.lat += (Math.random() - 0.5) * 0.002;
+  scenario.lng += (Math.random() - 0.5) * 0.002;
   showToast(`Incoming field report: ${scenario.label}`, 'warning');
   await sleep(1500);
 
