@@ -32,11 +32,16 @@ from backend.database import (
     get_report, get_all_reports, create_resource,
     get_all_resources, log_event, get_dashboard_stats,
 )
-import backend.gemma_engine as gemma_engine
 from backend.gemma_engine import (
     load_model, analyze_crisis_report_streaming,
-    get_model_status, is_model_loaded, _fallback_analysis,
+    get_model_status, is_model_loaded, is_inference_busy,
+    _fallback_analysis, stream_chat_completion, _parse_crisis_json,
 )
+
+# ─── Inference Task Tracking ──────────────────────────────
+# Prevents multiple briefing/proximity tasks from piling up
+_active_briefing_task: asyncio.Task | None = None
+_active_proximity_task: asyncio.Task | None = None
 
 # ─── Logging ───────────────────────────────────────────────
 logging.basicConfig(
@@ -240,7 +245,7 @@ async def _background_streaming_analysis(report_id: int, report_text: str,
 
         # Set up a thread-safe queue for token streaming
         token_queue = asyncio.Queue()
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         def on_token(token: str):
             """Called from the inference thread — safely enqueue for async broadcast."""
@@ -324,7 +329,16 @@ async def generate_situation_briefing():
     """
     Generate a streaming situation briefing.
     Returns immediately — tokens stream via WebSocket for live UI display.
+    Rejects if another inference task is already running.
     """
+    global _active_briefing_task
+
+    # Busy guard — reject if inference is already running
+    if _active_briefing_task and not _active_briefing_task.done():
+        return {"status": "busy", "message": "Briefing already in progress. Please wait."}
+    if is_inference_busy():
+        return {"status": "busy", "message": "AI engine busy with another task. Please wait."}
+
     reports = await get_all_reports()
     if not reports:
         return {"status": "success", "briefing": "No active reports to brief."}
@@ -362,7 +376,7 @@ async def generate_situation_briefing():
         f"Be direct. No JSON."
     )
 
-    asyncio.create_task(_stream_briefing(briefing_prompt, report_count))
+    _active_briefing_task = asyncio.create_task(_stream_briefing(briefing_prompt, report_count))
 
     return {
         "status": "streaming",
@@ -373,8 +387,6 @@ async def generate_situation_briefing():
 
 async def _stream_briefing(prompt: str, report_count: int):
     """Background task: stream briefing tokens via WebSocket."""
-    import time as _time
-
     try:
         await manager.broadcast({
             "type": "briefing_started",
@@ -387,32 +399,21 @@ async def _stream_briefing(prompt: str, report_count: int):
         def on_token(token: str):
             asyncio.run_coroutine_threadsafe(token_queue.put(token), loop)
 
-        def _run_streaming():
-            with gemma_engine._inference_lock:
-                start = _time.time()
-                stream = gemma_engine._llm.create_chat_completion(
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=300,
-                    temperature=0.2,
-                    top_p=0.85,
-                    repeat_penalty=1.15,
-                    stream=True,
-                )
-                chunks = []
-                for chunk in stream:
-                    delta = chunk["choices"][0].get("delta", {})
-                    token = delta.get("content", "")
-                    if token:
-                        chunks.append(token)
-                        on_token(token)
-                elapsed = _time.time() - start
-            return "".join(chunks).strip(), int(elapsed * 1000), len(chunks)
-
-        inference_future = loop.run_in_executor(gemma_engine._thread_pool, _run_streaming)
+        # Use the engine's public async API — no direct _llm access
+        inference_task = asyncio.ensure_future(
+            stream_chat_completion(
+                prompt=prompt,
+                max_tokens=300,
+                temperature=0.2,
+                top_p=0.85,
+                repeat_penalty=1.15,
+                on_token=on_token,
+            )
+        )
 
         # Drain token queue and broadcast each token
         token_count = 0
-        while not inference_future.done() or not token_queue.empty():
+        while not inference_task.done() or not token_queue.empty():
             try:
                 token = await asyncio.wait_for(token_queue.get(), timeout=0.5)
                 token_count += 1
@@ -424,7 +425,7 @@ async def _stream_briefing(prompt: str, report_count: int):
             except asyncio.TimeoutError:
                 continue
 
-        text, time_ms, chunks = await inference_future
+        text, time_ms, chunks = await inference_task
 
         await manager.broadcast({
             "type": "briefing_complete",
@@ -487,7 +488,16 @@ async def run_proximity_analysis():
     Gemma Feature #3: Cross-incident proximity intelligence.
     Identifies nearby incident pairs and uses Gemma to analyze
     cascade risks, resource sharing, and evacuation conflicts.
+    Rejects if another inference task is already running.
     """
+    global _active_proximity_task
+
+    # Busy guard — reject if inference is already running
+    if _active_proximity_task and not _active_proximity_task.done():
+        return {"status": "busy", "message": "Proximity analysis already in progress. Please wait."}
+    if is_inference_busy():
+        return {"status": "busy", "message": "AI engine busy with another task. Please wait."}
+
     reports = await get_all_reports()
     if len(reports) < 2:
         return {"status": "error", "message": "Need at least 2 reports for proximity analysis"}
@@ -586,7 +596,7 @@ async def run_proximity_analysis():
     )
 
     # Launch streaming in background
-    asyncio.create_task(_stream_proximity(prompt, top_pairs))
+    _active_proximity_task = asyncio.create_task(_stream_proximity(prompt, top_pairs))
 
     return {
         "status": "streaming",
@@ -597,8 +607,6 @@ async def run_proximity_analysis():
 
 async def _stream_proximity(prompt: str, pairs: list):
     """Background task: stream proximity analysis via WebSocket."""
-    import time as _time
-
     try:
         await manager.broadcast({
             "type": "proximity_started",
@@ -612,31 +620,20 @@ async def _stream_proximity(prompt: str, pairs: list):
         def on_token(token: str):
             asyncio.run_coroutine_threadsafe(token_queue.put(token), loop)
 
-        def _run_streaming():
-            with gemma_engine._inference_lock:
-                start = _time.time()
-                stream = gemma_engine._llm.create_chat_completion(
-                    messages=[{"role": "user", "content": prompt}],
-                    max_tokens=384,
-                    temperature=0.15,
-                    top_p=0.85,
-                    repeat_penalty=1.15,
-                    stream=True,
-                )
-                chunks = []
-                for chunk in stream:
-                    delta = chunk["choices"][0].get("delta", {})
-                    token = delta.get("content", "")
-                    if token:
-                        chunks.append(token)
-                        on_token(token)
-                elapsed = _time.time() - start
-            return "".join(chunks).strip(), int(elapsed * 1000), len(chunks)
-
-        inference_future = loop.run_in_executor(gemma_engine._thread_pool, _run_streaming)
+        # Use the engine's public async API — no direct _llm access
+        inference_task = asyncio.ensure_future(
+            stream_chat_completion(
+                prompt=prompt,
+                max_tokens=384,
+                temperature=0.15,
+                top_p=0.85,
+                repeat_penalty=1.15,
+                on_token=on_token,
+            )
+        )
 
         token_count = 0
-        while not inference_future.done() or not token_queue.empty():
+        while not inference_task.done() or not token_queue.empty():
             try:
                 token = await asyncio.wait_for(token_queue.get(), timeout=0.5)
                 token_count += 1
@@ -648,7 +645,7 @@ async def _stream_proximity(prompt: str, pairs: list):
             except asyncio.TimeoutError:
                 continue
 
-        raw_text, time_ms, chunks = await inference_future
+        raw_text, time_ms, chunks = await inference_task
 
         # Parse the AI response into per-pair insights
         insights = _parse_proximity_response(raw_text, pairs)
@@ -672,7 +669,6 @@ async def _stream_proximity(prompt: str, pairs: list):
 
 def _parse_proximity_response(raw_text: str, pairs: list) -> list:
     """Parse Gemma's proximity analysis response and merge with pair data."""
-    from backend.gemma_engine import _parse_crisis_json
 
     text = raw_text.strip()
     # Strip markdown fences

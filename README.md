@@ -73,7 +73,7 @@ Operator → Drops pin on offline map → Describes incident in natural language
                               impact zone appears on map
 ```
 
-**AI-First Pipeline:** When Gemma is loaded, new reports start as `PENDING` with neutral pulsing markers. Gemma runs in a `ThreadPoolExecutor` and streams tokens via WebSocket. When analysis completes, severity is **revealed** — Gemma is the sole authority. When Gemma is unavailable, a keyword-based triage engine provides instant fallback classification, ensuring the system degrades gracefully.
+**AI-First Pipeline:** When Gemma is loaded, new reports start as `PENDING` with neutral pulsing markers. Gemma runs in a `ThreadPoolExecutor` serialized by an `asyncio.Lock`, streaming tokens via WebSocket. When analysis completes, severity is **revealed** — Gemma is the sole authority. When Gemma is unavailable, a keyword-based triage engine provides instant fallback classification, ensuring the system degrades gracefully.
 
 ---
 
@@ -118,7 +118,7 @@ Operator → Drops pin on offline map → Describes incident in natural language
 The inference engine auto-detects CUDA capability by inspecting the compiled `llama-cpp-python` binary for CUDA shared objects. When a GPU is present, the system uses **progressive VRAM probing** — attempting full layer offload (99 layers), then stepping down (24 → 16 → 10 → 0) until the model fits. On a GTX 1650 (4 GB VRAM), this achieves 3–5× throughput over CPU-only. The entire detection and fallback process is automatic.
 
 ### 2. Non-Blocking Streaming Architecture
-The core engineering challenge: run a 3.3 GB language model without freezing the web server. Inference executes in a `ThreadPoolExecutor`, bridged to the async event loop via `asyncio.Queue`. Each token is broadcast to all connected WebSocket clients in real-time. The dashboard **never stalls** — operators can submit new reports, pan the map, and check stats while Gemma is mid-inference.
+The core engineering challenge: run a 3.3 GB language model without freezing the web server. Inference executes in a `ThreadPoolExecutor`, serialized at the async level by an `asyncio.Lock` to prevent concurrent model access, and bridged to the event loop via `asyncio.Queue`. Each token is broadcast to all connected WebSocket clients in real-time. Server-side busy guards reject overlapping requests with clear feedback, and frontend safety timeouts ensure UI recovery if WebSocket delivery fails. The dashboard **never stalls** — operators can submit new reports, pan the map, and check stats while Gemma is mid-inference.
 
 ### 3. Robust JSON Parsing Pipeline
 Gemma produces structured JSON with specific crisis-response fields. A **three-stage parser** handles LLM output quirks:
@@ -209,7 +209,7 @@ AEGISGEMMA includes a one-click demo (`Demo` button or `Ctrl+Shift+D`) that show
 
 | # | Scenario | Category |
 |---|----------|----------|
-| 1 | Building collapse — 25 trapped, aftershock risk | Infrastructure |
+| 1 | Building collapse — 25 trapped, stress fractures | Infrastructure |
 | 2 | Industrial chemical fire — toxic smoke plume | Fire / Hazmat |
 | 3 | Stadium crowd crush — 50 injured, mass casualty | Medical |
 

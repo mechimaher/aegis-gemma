@@ -51,8 +51,12 @@ _setup_cuda_library_paths()
 _llm = None
 _model_loaded = False
 _gpu_layers_offloaded = 0
-_inference_lock = threading.Lock()  # Serialize model access
-_thread_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="gemma")
+_inference_lock = threading.Lock()  # Serialize model access (thread level)
+_thread_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="gemma")
+
+# Async-level busy guard — prevents concurrent inference tasks from piling up
+_async_inference_lock = None  # Initialized lazily (needs running event loop)
+_inference_busy = False  # Simple flag for status checks
 
 
 def get_model_path() -> str:
@@ -157,6 +161,19 @@ def load_model(model_path: str = None) -> bool:
 def is_model_loaded() -> bool:
     """Check if the model is currently loaded."""
     return _model_loaded and _llm is not None
+
+
+def is_inference_busy() -> bool:
+    """Check if inference is currently running (non-blocking status check)."""
+    return _inference_busy
+
+
+def _get_async_lock() -> asyncio.Lock:
+    """Get or create the async inference lock (must be called from async context)."""
+    global _async_inference_lock
+    if _async_inference_lock is None:
+        _async_inference_lock = asyncio.Lock()
+    return _async_inference_lock
 
 
 # ─── Prompt Builder ──────────────────────────────────────
@@ -280,21 +297,27 @@ async def analyze_crisis_report(report_text: str, latitude: float = 0.0,
     """
     Non-blocking async inference — runs in thread pool to avoid
     blocking the FastAPI event loop.
+    Serialized via async lock to prevent concurrent model access.
     """
+    global _inference_busy
     if not is_model_loaded():
         return _fallback_analysis(report_text)
 
-    loop = asyncio.get_running_loop()
-    try:
-        result = await loop.run_in_executor(
-            _thread_pool,
-            _run_inference_sync,
-            report_text, latitude, longitude,
-        )
-        return result
-    except Exception as e:
-        logger.error(f"Inference failed: {e}", exc_info=True)
-        return _fallback_analysis(report_text)
+    async with _get_async_lock():
+        _inference_busy = True
+        try:
+            loop = asyncio.get_running_loop()
+            result = await loop.run_in_executor(
+                _thread_pool,
+                _run_inference_sync,
+                report_text, latitude, longitude,
+            )
+            return result
+        except Exception as e:
+            logger.error(f"Inference failed: {e}", exc_info=True)
+            return _fallback_analysis(report_text)
+        finally:
+            _inference_busy = False
 
 
 async def analyze_crisis_report_streaming(
@@ -306,21 +329,89 @@ async def analyze_crisis_report_streaming(
     """
     Non-blocking async streaming inference.
     Calls on_token(str) for each generated token.
+    Serialized via async lock to prevent concurrent model access.
     """
+    global _inference_busy
     if not is_model_loaded():
         return _fallback_analysis(report_text)
 
-    loop = asyncio.get_running_loop()
-    try:
-        result = await loop.run_in_executor(
-            _thread_pool,
-            _run_inference_streaming,
-            report_text, latitude, longitude, on_token,
+    async with _get_async_lock():
+        _inference_busy = True
+        try:
+            loop = asyncio.get_running_loop()
+            result = await loop.run_in_executor(
+                _thread_pool,
+                _run_inference_streaming,
+                report_text, latitude, longitude, on_token,
+            )
+            return result
+        except Exception as e:
+            logger.error(f"Streaming inference failed: {e}", exc_info=True)
+            return _fallback_analysis(report_text)
+        finally:
+            _inference_busy = False
+
+
+# ─── Generic Streaming Chat (for briefing / proximity) ───
+def _run_streaming_chat(prompt: str, max_tokens: int = 300,
+                        temperature: float = 0.2, top_p: float = 0.85,
+                        repeat_penalty: float = 1.15,
+                        on_token: Callable[[str], None] = None) -> tuple:
+    """
+    Run a generic streaming chat completion. Thread-safe via _inference_lock.
+    Returns (text, elapsed_ms, token_count).
+    Used by briefing and proximity — keeps all model access in one module.
+    """
+    chunks = []
+    with _inference_lock:
+        start = time.time()
+        stream = _llm.create_chat_completion(
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=max_tokens,
+            temperature=temperature,
+            top_p=top_p,
+            repeat_penalty=repeat_penalty,
+            stream=True,
         )
-        return result
-    except Exception as e:
-        logger.error(f"Streaming inference failed: {e}", exc_info=True)
-        return _fallback_analysis(report_text)
+        for chunk in stream:
+            delta = chunk["choices"][0].get("delta", {})
+            token = delta.get("content", "")
+            if token:
+                chunks.append(token)
+                if on_token:
+                    on_token(token)
+        elapsed = time.time() - start
+    return "".join(chunks).strip(), int(elapsed * 1000), len(chunks)
+
+
+async def stream_chat_completion(prompt: str, max_tokens: int = 300,
+                                 temperature: float = 0.2, top_p: float = 0.85,
+                                 repeat_penalty: float = 1.15,
+                                 on_token: Callable[[str], None] = None) -> tuple:
+    """
+    Async wrapper for generic streaming chat.
+    Returns (text, elapsed_ms, token_count).
+    Serialized via async lock to prevent concurrent model access.
+    """
+    global _inference_busy
+    if not is_model_loaded():
+        return ("Model not loaded", 0, 0)
+
+    async with _get_async_lock():
+        _inference_busy = True
+        try:
+            loop = asyncio.get_running_loop()
+            result = await loop.run_in_executor(
+                _thread_pool,
+                _run_streaming_chat,
+                prompt, max_tokens, temperature, top_p, repeat_penalty, on_token,
+            )
+            return result
+        except Exception as e:
+            logger.error(f"Chat completion failed: {e}", exc_info=True)
+            return (f"Inference error: {e}", 0, 0)
+        finally:
+            _inference_busy = False
 
 
 # ─── JSON Parser ─────────────────────────────────────────

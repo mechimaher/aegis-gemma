@@ -496,6 +496,7 @@ function showAiAnalysis(report) {
 async function generateBriefing() {
   const btn = document.getElementById('btn-briefing');
   const content = document.getElementById('briefing-content');
+  const briefingBtnDefault = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg> Generate Briefing';
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Synthesizing...';
 
   // Show live streaming terminal
@@ -510,20 +511,33 @@ async function generateBriefing() {
     </div>`;
   state.briefingBuffer = '';
 
+  // Safety timeout: re-enable button after 120s if WS never completes
+  if (state._briefingTimeout) clearTimeout(state._briefingTimeout);
+  state._briefingTimeout = setTimeout(() => {
+    if (btn.disabled) {
+      btn.disabled = false; btn.innerHTML = briefingBtnDefault;
+      showToast('Briefing timed out. Try again.', 'warning');
+    }
+  }, 120000);
+
   try {
     const res = await fetch('/api/briefing', { method: 'POST' });
     const data = await res.json();
-    // If the model isn't loaded, we get instant fallback
     if (data.status === 'success') {
       content.innerHTML = `<div class="briefing-text">${(data.briefing || '').replace(/\n/g,'<br>')}</div>`;
-      btn.disabled = false;
-      btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg> Generate Briefing';
+      btn.disabled = false; btn.innerHTML = briefingBtnDefault;
+      clearTimeout(state._briefingTimeout);
+    } else if (data.status === 'busy') {
+      content.innerHTML = `<div class="briefing-empty"><p>${data.message}</p></div>`;
+      btn.disabled = false; btn.innerHTML = briefingBtnDefault;
+      clearTimeout(state._briefingTimeout);
+      showToast(data.message, 'warning');
     }
     // If streaming, tokens will come via WebSocket — UI is already set up
   } catch(e) {
     content.innerHTML = '<p class="error">Failed to generate briefing.</p>';
-    btn.disabled = false;
-    btn.innerHTML = 'Generate Briefing';
+    btn.disabled = false; btn.innerHTML = briefingBtnDefault;
+    clearTimeout(state._briefingTimeout);
   }
 }
 
@@ -541,6 +555,7 @@ function onBriefingToken(token) {
 function onBriefingComplete(data) {
   const content = document.getElementById('briefing-content');
   const btn = document.getElementById('btn-briefing');
+  if (state._briefingTimeout) clearTimeout(state._briefingTimeout);
   const text = data.briefing || state.briefingBuffer || '';
   const meta = `<div class="briefing-meta">${data.inference_time_ms || 0}ms · ${data.tokens_used || 0} tokens · ${data.report_count || 0} reports analyzed · gemma-4-e2b-it-local</div>`;
   content.innerHTML = `<div class="briefing-text">${text.replace(/\n/g,'<br>')}</div>${meta}`;
@@ -823,6 +838,7 @@ document.addEventListener('keydown', (e) => {
 
 async function runProximityAnalysis() {
   const btn = document.getElementById('btn-proximity');
+  const proxBtnDefault = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M8.12 8.12L15.88 15.88"/></svg> Analyze Proximity';
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> Analyzing Proximity...';
 
@@ -838,17 +854,29 @@ async function runProximityAnalysis() {
 
   state.proximityBuffer = '';
 
+  // Safety timeout: re-enable button after 120s
+  if (state._proximityTimeout) clearTimeout(state._proximityTimeout);
+  state._proximityTimeout = setTimeout(() => {
+    if (btn.disabled) {
+      btn.disabled = false; btn.innerHTML = proxBtnDefault;
+      showToast('Proximity analysis timed out. Try again.', 'warning');
+    }
+  }, 120000);
+
   try {
     const res = await fetch('/api/proximity-analysis', { method: 'POST' });
     const data = await res.json();
-    if (data.status === 'error') {
+    if (data.status === 'error' || data.status === 'busy') {
       content.innerHTML = `<div class="briefing-empty"><p>${data.message}</p></div>`;
       btn.disabled = false;
-      btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M8.12 8.12L15.88 15.88"/></svg> Analyze Proximity';
+      btn.innerHTML = proxBtnDefault;
+      clearTimeout(state._proximityTimeout);
+      if (data.status === 'busy') showToast(data.message, 'warning');
     }
   } catch (err) {
     content.innerHTML = '<p class="error">Failed to start proximity analysis.</p>';
-    btn.disabled = false;
+    btn.disabled = false; btn.innerHTML = proxBtnDefault;
+    clearTimeout(state._proximityTimeout);
   }
 }
 
@@ -887,6 +915,7 @@ function onProximityToken(token) {
 
 function onProximityComplete(msg) {
   const btn = document.getElementById('btn-proximity');
+  if (state._proximityTimeout) clearTimeout(state._proximityTimeout);
   btn.disabled = false;
   btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M8.12 8.12L15.88 15.88"/></svg> Analyze Proximity';
 
